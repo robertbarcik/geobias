@@ -8,6 +8,11 @@ import sys
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
+
+# Load .env from the project root (where pyproject.toml lives)
+_project_root = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_project_root / ".env")
 
 from .config import (
     ALL_CATEGORIES,

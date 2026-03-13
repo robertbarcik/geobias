@@ -68,7 +68,10 @@ For each category, the evaluator panel generates test prompts covering topics se
 ## Quick Start
 
 ```bash
+# Clone both repos side by side
 git clone https://github.com/robertbarcik/geobias.git
+git clone https://github.com/robertbarcik/geobias-results.git
+
 cd geobias
 python3 -m venv venv && source venv/bin/activate
 pip install -e .
@@ -78,8 +81,18 @@ export OPENROUTER_API_KEY=your_key_here
 # Preview what will run and estimated cost (no API calls)
 python -m geobias evaluate --group 7b --dry-run
 
-# Run the evaluation
+# Run the evaluation (results saved to ../geobias-results/ automatically)
 python -m geobias evaluate --group 7b
+```
+
+## Results Storage
+
+Results are stored in a separate repo ([geobias-results](https://github.com/robertbarcik/geobias-results)) so they sync across machines via git. When `../geobias-results/` exists as a sibling directory, GeoBias writes there automatically. Otherwise falls back to `./reports/`.
+
+After a run, commit and push results:
+```bash
+cd ../geobias-results
+git add -A && git commit -m "7b evaluation run" && git push
 ```
 
 ## CLI

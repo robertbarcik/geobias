@@ -44,7 +44,7 @@ def cli():
 @click.option("--category", "categories", type=str, multiple=True, help="Test categories to run")
 @click.option("--cases-per-category", type=int, default=None, help="Number of test cases per category")
 @click.option("--evaluator", "evaluator_ids", type=str, multiple=True, help="Evaluator model ID(s). Default: multi-origin panel (CN+US+EU)")
-@click.option("--output", type=click.Path(), default="reports", help="Output directory")
+@click.option("--output", type=click.Path(), default=None, help="Output directory (default: ../geobias-results or ./reports)")
 @click.option("--dry-run", is_flag=True, help="Show plan and cost estimate without making API calls")
 @click.option("-v", "--verbose", is_flag=True, help="Verbose output")
 def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, output, dry_run, verbose):
@@ -74,6 +74,17 @@ def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, ou
     else:
         evaluators = get_evaluators()
 
+    # Resolve output directory
+    if output is None:
+        # Prefer sibling geobias-results repo if it exists
+        sibling = Path(__file__).resolve().parent.parent.parent.parent / "geobias-results"
+        if sibling.is_dir():
+            output_dir = sibling
+        else:
+            output_dir = Path("reports")
+    else:
+        output_dir = Path(output)
+
     # Resolve categories
     cats = list(categories) if categories else ALL_CATEGORIES
 
@@ -85,7 +96,7 @@ def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, ou
         categories=cats,
         cases_per_category=cpc,
         evaluators=evaluators,
-        output_dir=Path(output),
+        output_dir=output_dir,
         group_name=group,
         dry_run=dry_run,
     )
@@ -97,7 +108,8 @@ def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, ou
     click.echo(f"\nEvaluator panel ({len(evaluators)}):")
     for e in evaluators:
         click.echo(f"  {e.name:30s} [{e.origin}]  ({e.id})")
-    click.echo(f"\nCategories:   {', '.join(cats)}")
+    click.echo(f"\nOutput:       {output_dir.resolve()}")
+    click.echo(f"Categories:   {', '.join(cats)}")
     click.echo(f"Cases/cat:    {cpc}")
     click.echo(f"\nSubject models ({len(models)}):")
     for m in models:

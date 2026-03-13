@@ -130,17 +130,20 @@ Single self-contained HTML file with inline CSS/JS. Dark theme, interactive:
 
 ## Data Persistence
 
+Results are stored in a **separate repo**: [geobias-results](https://github.com/robertbarcik/geobias-results). When `../geobias-results/` exists as a sibling directory, GeoBias writes there automatically. Otherwise falls back to `./reports/`. Override with `--output`.
+
 ```
-reports/<group>-run-<timestamp>/
-├── config.json          # Run configuration
-├── test_cases.json      # Generated test prompts
-├── responses/           # Per-model response files
+../geobias-results/<group>-run-<timestamp>/
+├── config.json                    # Run configuration
+├── test_cases.json                # Generated test prompts
+├── responses/                     # Per-model response files
 │   ├── qwen--qwen3-8b.json
 │   └── ...
-├── evaluations.json     # Orchestrator assessments
-├── metrics.json         # Computed comparative metrics
-├── report.html          # Interactive report
-└── .cache/              # LLM response cache (hash-keyed)
+├── evaluations.json               # Consensus evaluations (merged across evaluators)
+├── evaluations_per_evaluator/     # Raw per-evaluator judgments
+├── metrics.json                   # Computed comparative metrics
+├── report.html                    # Interactive report
+└── .cache/                        # LLM response cache (gitignored)
 ```
 
 ## Ethical Considerations

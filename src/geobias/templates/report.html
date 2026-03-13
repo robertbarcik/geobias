@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoBias Report</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #242736;
+  --border: #2e3245;
+  --text: #e4e6f0;
+  --text-dim: #8b8fa3;
+  --accent: #6c7bf0;
+  --accent-light: #8b96f5;
+  --green: #4caf7c;
+  --yellow: #e6b84d;
+  --orange: #e68a4d;
+  --red: #e6534d;
+  --cn-color: #e05555;
+  --us-color: #5577cc;
+  --eu-color: #55aa77;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+header {
+  text-align: center;
+  padding: 3rem 0 2rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+header .subtitle { color: var(--text-dim); font-size: 1.1rem; }
+header .meta { color: var(--text-dim); font-size: 0.85rem; margin-top: 1rem; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.card h2 {
+  font-size: 1.3rem;
+  margin-bottom: 1rem;
+  color: var(--accent-light);
+}
+
+.card h3 { font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--text); }
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-box {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.stat-box .value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.stat-box .label { font-size: 0.85rem; color: var(--text-dim); }
+
+/* Origin badges */
+.origin-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.origin-CN { background: rgba(224,85,85,0.2); color: var(--cn-color); }
+.origin-US { background: rgba(85,119,204,0.2); color: var(--us-color); }
+.origin-EU { background: rgba(85,170,119,0.2); color: var(--eu-color); }
+.origin-unknown { background: rgba(139,143,163,0.2); color: var(--text-dim); }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Heatmap cells */
+.heatmap-cell {
+  display: inline-block;
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.heat-green { background: rgba(76,175,124,0.3); color: var(--green); }
+.heat-yellow { background: rgba(230,184,77,0.3); color: var(--yellow); }
+.heat-orange { background: rgba(230,138,77,0.3); color: var(--orange); }
+.heat-red { background: rgba(230,83,77,0.3); color: var(--red); }
+
+/* Score bar */
+.score-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.score-bar .bar {
+  flex: 1;
+  height: 8px;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.score-bar .bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+/* Collapsible sections */
+.collapsible {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.collapsible::after {
+  content: '\25BC';
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+}
+
+.collapsible.collapsed::after { transform: rotate(-90deg); }
+.collapsible-content { overflow: hidden; }
+.collapsible-content.hidden { display: none; }
+
+/* Example cards */
+.example {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-left: 3px solid var(--accent);
+}
+
+.example .prompt { color: var(--text-dim); font-style: italic; margin-bottom: 0.5rem; }
+.example .response {
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: hidden;
+  position: relative;
+}
+.example .response.expanded { max-height: none; }
+.example .response .fade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(transparent, var(--surface2));
+}
+
+.expand-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+.expand-btn:hover { background: var(--accent-light); }
+
+/* Charts container */
+.chart-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.bar-chart { padding: 0.5rem 0; }
+.bar-chart .bar-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  gap: 0.5rem;
+}
+.bar-chart .bar-label {
+  width: 140px;
+  font-size: 0.85rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+.bar-chart .bar-track {
+  flex: 1;
+  height: 24px;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.bar-chart .bar-value {
+  height: 100%;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+  min-width: 30px;
+}
+
+/* Model profile cards */
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1rem;
+}
+.profile-card {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+.profile-card h4 { margin-bottom: 0.75rem; }
+.profile-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  font-size: 0.9rem;
+}
+.profile-stat .label { color: var(--text-dim); }
+
+/* Tabs */
+.tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.tab {
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent-light); border-bottom-color: var(--accent); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Nav */
+nav {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+  padding: 0.5rem 2rem;
+}
+nav a {
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+nav a:hover { color: var(--accent-light); }
+
+/* Download button */
+.download-btn {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.download-btn:hover { background: var(--border); }
+
+/* Disclaimer */
+.disclaimer {
+  background: rgba(230,184,77,0.1);
+  border: 1px solid rgba(230,184,77,0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 0.85rem;
+  color: var(--yellow);
+  margin-bottom: 1.5rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container { padding: 1rem; }
+  header h1 { font-size: 1.8rem; }
+  .summary-grid { grid-template-columns: 1fr 1fr; }
+  .profile-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#summary">Summary</a>
+  <a href="#heatmap">Refusal Heatmap</a>
+  <a href="#categories">Categories</a>
+  <a href="#profiles">Model Profiles</a>
+  <a href="#methodology">Methodology</a>
+  <a href="#data">Raw Data</a>
+</nav>
+
+<div class="container">
+
+<header>
+  <h1>GeoBias Report</h1>
+  <p class="subtitle">Geopolitical Bias Evaluation of Language Models</p>
+  <p class="meta">Generated {{ generated_at }} | {{ models|length }} models | {{ categories|length }} categories</p>
+</header>
+
+<div class="disclaimer">
+  This evaluation tests model weights via API (OpenRouter). Results may differ from the models' native chat interfaces, which may apply additional moderation layers. Results represent model behavior at a point in time and may not reflect behavior after updates.
+</div>
+
+<!-- Executive Summary -->
+<section id="summary">
+<div class="card">
+  <h2>Executive Summary</h2>
+  <div class="summary-grid">
+    <div class="stat-box">
+      <div class="value">{{ summary.total_models }}</div>
+      <div class="label">Models Tested</div>
+    </div>
+    <div class="stat-box">
+      <div class="value">{{ summary.total_test_cases }}</div>
+      <div class="label">Test Cases</div>
+    </div>
+    <div class="stat-box">
+      <div class="value">{{ summary.total_evaluations }}</div>
+      <div class="label">Evaluations</div>
+    </div>
+  </div>
+
+  <h3>Model Bias Rankings (by asymmetry)</h3>
+  <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">
+    Asymmetry score measures the difference in how a model treats its own-origin topics vs. other-origin topics. Higher absolute values indicate more asymmetric behavior.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Origin</th>
+        <th>Avg Score</th>
+        <th>Asymmetry</th>
+        <th>Evaluations</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ms in summary.model_summaries %}
+      <tr>
+        <td>{{ ms.name }}</td>
+        <td><span class="origin-badge origin-{{ ms.origin }}">{{ ms.origin }}</span></td>
+        <td>{{ ms.avg_score }}</td>
+        <td>
+          <span class="heatmap-cell {% if ms.asymmetry_score|abs > 2 %}heat-red{% elif ms.asymmetry_score|abs > 1 %}heat-orange{% elif ms.asymmetry_score|abs > 0.5 %}heat-yellow{% else %}heat-green{% endif %}">
+            {{ "%+.2f"|format(ms.asymmetry_score) }}
+          </span>
+        </td>
+        <td>{{ ms.total_evaluations }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</section>
+
+<!-- Refusal Asymmetry Heatmap -->
+<section id="heatmap">
+<div class="card">
+  <h2>Refusal Asymmetry Heatmap</h2>
+  <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">
+    Shows how each model responds to topics sensitive to different regions. Green = answered, Yellow = hedged, Orange = deflected, Red = refused.
+  </p>
+  {% if refusal_heatmap %}
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Origin</th>
+        <th>China-sensitive</th>
+        <th>US-sensitive</th>
+        <th>EU-sensitive</th>
+        <th>Neutral</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in refusal_heatmap %}
+      <tr>
+        <td>{{ row.model_name }}</td>
+        <td><span class="origin-badge origin-{{ row.model_origin }}">{{ row.model_origin }}</span></td>
+        {% for region in ["CN", "US", "EU", "neutral"] %}
+        <td>
+          {% set r = row.regions.get(region, {}) %}
+          {% if r.total > 0 %}
+          <div style="display: flex; gap: 2px; height: 24px; border-radius: 4px; overflow: hidden;">
+            {% if r.answered_pct > 0 %}
+            <div style="width: {{ r.answered_pct }}%; background: var(--green);" title="Answered: {{ r.answered_pct }}%"></div>
+            {% endif %}
+            {% if r.hedged_pct > 0 %}
+            <div style="width: {{ r.hedged_pct }}%; background: var(--yellow);" title="Hedged: {{ r.hedged_pct }}%"></div>
+            {% endif %}
+            {% if r.deflected_pct > 0 %}
+            <div style="width: {{ r.deflected_pct }}%; background: var(--orange);" title="Deflected: {{ r.deflected_pct }}%"></div>
+            {% endif %}
+            {% if r.refused_pct > 0 %}
+            <div style="width: {{ r.refused_pct }}%; background: var(--red);" title="Refused: {{ r.refused_pct }}%"></div>
+            {% endif %}
+          </div>
+          {% else %}
+          <span style="color: var(--text-dim);">N/A</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div style="display: flex; gap: 1.5rem; margin-top: 1rem; font-size: 0.8rem; color: var(--text-dim);">
+    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--green); border-radius: 2px; vertical-align: middle;"></span> Answered</span>
+    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--yellow); border-radius: 2px; vertical-align: middle;"></span> Hedged</span>
+    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--orange); border-radius: 2px; vertical-align: middle;"></span> Deflected</span>
+    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--red); border-radius: 2px; vertical-align: middle;"></span> Refused</span>
+  </div>
+  {% else %}
+  <p style="color: var(--text-dim);">No refusal asymmetry data available. Run the refusal_asymmetry category to see this heatmap.</p>
+  {% endif %}
+</div>
+</section>
+
+<!-- Per-Category Deep Dives -->
+<section id="categories">
+<div class="card">
+  <h2>Category Analysis</h2>
+
+  <div class="tabs" id="category-tabs">
+    {% for cat in category_details %}
+    <div class="tab {% if loop.first %}active{% endif %}" data-tab="cat-{{ cat.name }}">{{ cat.name | replace("_", " ") | title }}</div>
+    {% endfor %}
+  </div>
+
+  {% for cat in category_details %}
+  <div class="tab-content {% if loop.first %}active{% endif %}" id="cat-{{ cat.name }}">
+    <p style="color: var(--text-dim); margin-bottom: 1rem;">{{ cat.description }}</p>
+    <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem;">{{ cat.total_cases }} test cases</p>
+
+    <!-- Score comparison chart -->
+    <div class="bar-chart">
+      {% for model_id, ms in cat.model_scores.items() %}
+      <div class="bar-row">
+        <span class="bar-label">
+          {{ ms.name }}
+          <span class="origin-badge origin-{{ ms.origin }}" style="margin-left: 4px;">{{ ms.origin }}</span>
+        </span>
+        <div class="bar-track">
+          <div class="bar-value" style="width: {{ (ms.avg_score / 10 * 100)|int }}%; background: {% if ms.avg_score >= 7 %}var(--green){% elif ms.avg_score >= 5 %}var(--yellow){% elif ms.avg_score >= 3 %}var(--orange){% else %}var(--red){% endif %};">
+            {{ ms.avg_score }}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Examples -->
+    {% if cat.examples %}
+    <h3 class="collapsible" onclick="toggleCollapsible(this)" style="margin-top: 1.5rem;">Notable Examples</h3>
+    <div class="collapsible-content">
+      {% for ex in cat.examples %}
+      <div class="example">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+          <strong>{{ ex.model_name }}</strong>
+          <span style="font-size: 0.8rem; color: var(--text-dim);">{{ ex.test_case.get('target_region', '') }}</span>
+        </div>
+        <div class="prompt">{{ ex.test_case.prompt }}</div>
+        <div class="response" id="resp-{{ cat.name }}-{{ loop.index }}">
+          {{ ex.response }}
+          {% if ex.response|length > 300 %}
+          <div class="fade"></div>
+          {% endif %}
+        </div>
+        {% if ex.response|length > 300 %}
+        <button class="expand-btn" onclick="toggleResponse(this, 'resp-{{ cat.name }}-{{ loop.index }}')">Show more</button>
+        {% endif %}
+        {% if ex.evaluation.justification %}
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--text-dim);">
+          <strong>Evaluation:</strong> {{ ex.evaluation.justification }}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+</section>
+
+<!-- Model Profiles -->
+<section id="profiles">
+<div class="card">
+  <h2>Model Profiles</h2>
+  <div class="profile-grid">
+    {% for profile in model_profiles %}
+    <div class="profile-card">
+      <h4>
+        {{ profile.model.name }}
+        <span class="origin-badge origin-{{ profile.model.origin }}" style="margin-left: 4px;">{{ profile.model.origin }}</span>
+      </h4>
+      <div class="profile-stat">
+        <span class="label">Parameters</span>
+        <span>{{ profile.model.params_b }}B</span>
+      </div>
+      <div class="profile-stat">
+        <span class="label">Family</span>
+        <span>{{ profile.model.family }}</span>
+      </div>
+      <div class="profile-stat">
+        <span class="label">Avg Score</span>
+        <span>{{ profile.avg_score }}</span>
+      </div>
+      <div class="profile-stat">
+        <span class="label">Asymmetry</span>
+        <span class="heatmap-cell {% if profile.asymmetry_score|abs > 2 %}heat-red{% elif profile.asymmetry_score|abs > 1 %}heat-orange{% elif profile.asymmetry_score|abs > 0.5 %}heat-yellow{% else %}heat-green{% endif %}" style="padding: 2px 8px;">
+          {{ "%+.2f"|format(profile.asymmetry_score) }}
+        </span>
+      </div>
+      <div class="profile-stat">
+        <span class="label">Own-region avg</span>
+        <span>{{ profile.own_region_avg }}</span>
+      </div>
+      <div class="profile-stat">
+        <span class="label">Other-region avg</span>
+        <span>{{ profile.other_region_avg }}</span>
+      </div>
+      <div class="profile-stat">
+        <span class="label">Strongest</span>
+        <span style="color: var(--green);">{{ profile.strongest_category | replace("_", " ") }}</span>
+      </div>
+      <div class="profile-stat">
+        <span class="label">Weakest</span>
+        <span style="color: var(--red);">{{ profile.weakest_category | replace("_", " ") }}</span>
+      </div>
+      {% if profile.category_scores %}
+      <div style="margin-top: 0.75rem;">
+        {% for cat, score in profile.category_scores.items() %}
+        <div class="score-bar" style="margin-bottom: 4px;">
+          <span style="width: 120px; font-size: 0.75rem; color: var(--text-dim);">{{ cat | replace("_", " ") }}</span>
+          <div class="bar">
+            <div class="bar-fill" style="width: {{ (score / 10 * 100)|int }}%; background: {% if score >= 7 %}var(--green){% elif score >= 5 %}var(--yellow){% elif score >= 3 %}var(--orange){% else %}var(--red){% endif %};"></div>
+          </div>
+          <span style="width: 30px; font-size: 0.75rem; text-align: right;">{{ score }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+</section>
+
+<!-- Methodology -->
+<section id="methodology">
+<div class="card">
+  <h2>Methodology</h2>
+
+  <h3>How Tests Are Designed</h3>
+  <p style="margin-bottom: 1rem;">
+    An orchestrator model ({{ models[0].id if models else 'N/A' }}) generates test prompts for each category following specific guidelines. All subject models receive the exact same prompts — no per-model variation. The orchestrator then evaluates each response using explicit, documented criteria.
+  </p>
+
+  <h3>Scoring</h3>
+  <p style="margin-bottom: 1rem;">
+    Each response is scored on category-specific criteria (1-10 scale). The orchestrator provides detailed justifications with specific evidence from the response. Scores are aggregated into per-model and per-category metrics.
+  </p>
+
+  <h3>Bias Asymmetry</h3>
+  <p style="margin-bottom: 1rem;">
+    The key metric is <strong>asymmetry</strong>: the difference between how a model handles topics sensitive to its own origin region vs. topics sensitive to other regions. A model that hedges on China topics but freely discusses US topics (or vice versa) shows high asymmetry.
+  </p>
+
+  <h3 class="collapsible" onclick="toggleCollapsible(this)">Orchestrator System Prompt</h3>
+  <div class="collapsible-content">
+    <pre style="background: var(--surface2); padding: 1rem; border-radius: 8px; font-size: 0.85rem; white-space: pre-wrap; margin-top: 0.5rem;">{{ orchestrator_prompt }}</pre>
+  </div>
+
+  <h3 style="margin-top: 1.5rem;">Limitations</h3>
+  <ul style="color: var(--text-dim); font-size: 0.9rem; padding-left: 1.5rem;">
+    <li>Results reflect behavior through the OpenRouter API, which may differ from native interfaces.</li>
+    <li>The orchestrator model itself may have biases that affect evaluation.</li>
+    <li>Test cases are AI-generated and may not cover all relevant scenarios.</li>
+    <li>Scores are relative, not absolute — they're most meaningful in comparison across models.</li>
+    <li>Model behavior can change with updates; results are a point-in-time snapshot.</li>
+  </ul>
+</div>
+</section>
+
+<!-- Raw Data -->
+<section id="data">
+<div class="card">
+  <h2>Raw Data</h2>
+  <p style="color: var(--text-dim); margin-bottom: 1rem;">Download the complete dataset for further analysis.</p>
+  <button class="download-btn" onclick="downloadRawData()">
+    Download JSON Dataset
+  </button>
+</div>
+</section>
+
+<footer style="text-align: center; padding: 2rem 0; color: var(--text-dim); font-size: 0.8rem;">
+  Generated by GeoBias v0.1.0
+</footer>
+
+</div>
+
+<script>
+// Tab switching
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    const tabGroup = this.parentElement;
+    const contentParent = tabGroup.parentElement;
+    tabGroup.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    contentParent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    const target = document.getElementById(this.dataset.tab);
+    if (target) target.classList.add('active');
+  });
+});
+
+// Collapsible sections
+function toggleCollapsible(el) {
+  el.classList.toggle('collapsed');
+  const content = el.nextElementSibling;
+  if (content) content.classList.toggle('hidden');
+}
+
+// Expand/collapse response text
+function toggleResponse(btn, id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const isExpanded = el.classList.toggle('expanded');
+  btn.textContent = isExpanded ? 'Show less' : 'Show more';
+  const fade = el.querySelector('.fade');
+  if (fade) fade.style.display = isExpanded ? 'none' : '';
+}
+
+// Raw data download
+function downloadRawData() {
+  const data = {{ raw_data | safe }};
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'geobias-data.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+
+</body>
+</html>

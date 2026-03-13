@@ -1,0 +1,164 @@
+"""LLM client for OpenRouter API calls with caching and rate limiting."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import os
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+from openai import AsyncOpenAI
+
+
+@dataclass
+class LLMResponse:
+    content: str
+    model: str
+    usage: dict
+    cached: bool = False
+
+
+class LLMClient:
+    """Async OpenRouter client with response caching and rate limiting."""
+
+    def __init__(self, cache_dir: Optional[Path] = None, requests_per_minute: int = 30):
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENROUTER_API_KEY environment variable is required")
+
+        self.client = AsyncOpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
+        self.cache_dir = cache_dir
+        self.rpm_limit = requests_per_minute
+        self._semaphore = asyncio.Semaphore(5)  # max concurrent requests
+        self._last_request_time = 0.0
+        self._min_interval = 60.0 / requests_per_minute
+
+    def _cache_key(self, model: str, messages: list[dict], temperature: float) -> str:
+        payload = json.dumps({"model": model, "messages": messages, "temperature": temperature}, sort_keys=True)
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    def _get_cached(self, key: str) -> Optional[LLMResponse]:
+        if not self.cache_dir:
+            return None
+        cache_file = self.cache_dir / f"{key}.json"
+        if cache_file.exists():
+            data = json.loads(cache_file.read_text())
+            return LLMResponse(
+                content=data["content"],
+                model=data["model"],
+                usage=data.get("usage", {}),
+                cached=True,
+            )
+        return None
+
+    def _save_cache(self, key: str, response: LLMResponse) -> None:
+        if not self.cache_dir:
+            return
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = self.cache_dir / f"{key}.json"
+        cache_file.write_text(json.dumps({
+            "content": response.content,
+            "model": response.model,
+            "usage": response.usage,
+        }))
+
+    async def complete(
+        self,
+        model: str,
+        messages: list[dict],
+        temperature: float = 0.0,
+        max_tokens: int = 4096,
+    ) -> LLMResponse:
+        """Send a chat completion request with caching and rate limiting."""
+        cache_key = self._cache_key(model, messages, temperature)
+        cached = self._get_cached(cache_key)
+        if cached:
+            return cached
+
+        async with self._semaphore:
+            # Rate limiting
+            now = time.monotonic()
+            elapsed = now - self._last_request_time
+            if elapsed < self._min_interval:
+                await asyncio.sleep(self._min_interval - elapsed)
+            self._last_request_time = time.monotonic()
+
+            response = await self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+        content = response.choices[0].message.content or ""
+        usage = {}
+        if response.usage:
+            usage = {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+            }
+
+        result = LLMResponse(content=content, model=model, usage=usage)
+        self._save_cache(cache_key, result)
+        return result
+
+    async def complete_json(
+        self,
+        model: str,
+        messages: list[dict],
+        temperature: float = 0.0,
+        max_tokens: int = 4096,
+    ) -> dict:
+        """Complete and parse the response as JSON."""
+        resp = await self.complete(model, messages, temperature, max_tokens)
+        # Try to extract JSON from the response
+        text = resp.content.strip()
+        # Handle markdown code blocks
+        if text.startswith("```"):
+            lines = text.split("\n")
+            # Remove first and last lines (``` markers)
+            lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines)
+        return json.loads(text)
+
+
+def estimate_cost(
+    num_models: int,
+    num_categories: int,
+    cases_per_category: int,
+) -> dict:
+    """Rough cost estimate for an evaluation run."""
+    # Each test case: 1 orchestrator generation call + N model response calls + N orchestrator evaluation calls
+    generation_calls = num_categories  # one batch generation per category
+    response_calls = num_models * num_categories * cases_per_category
+    evaluation_calls = response_calls  # one evaluation per response
+
+    # Rough token estimates
+    avg_prompt_tokens = 800
+    avg_completion_tokens = 500
+
+    # OpenRouter pricing varies; use rough averages
+    # Small models: ~$0.10/M tokens, Orchestrator (Claude Sonnet): ~$3/M input, $15/M output
+    small_model_cost = response_calls * (avg_prompt_tokens * 0.10 + avg_completion_tokens * 0.10) / 1_000_000
+    orchestrator_cost = (generation_calls + evaluation_calls) * (
+        avg_prompt_tokens * 3.0 + avg_completion_tokens * 15.0
+    ) / 1_000_000
+
+    return {
+        "generation_calls": generation_calls,
+        "response_calls": response_calls,
+        "evaluation_calls": evaluation_calls,
+        "total_api_calls": generation_calls + response_calls + evaluation_calls,
+        "estimated_cost_usd": round(small_model_cost + orchestrator_cost, 2),
+        "note": "Rough estimate. Actual cost depends on model pricing and response lengths.",
+    }

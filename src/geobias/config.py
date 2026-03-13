@@ -33,27 +33,27 @@ class ModelGroup:
 
 
 # Default model groups — update IDs after verifying OpenRouter availability
+# Model IDs verified against OpenRouter API as of 2026-03-13
 DEFAULT_MODEL_GROUPS: dict[str, ModelGroup] = {
     "3b": ModelGroup(
         name="3b",
-        description="~3B parameter class models",
+        description="~3-4B parameter class models",
         models=[
-            ModelSpec("qwen/qwen3-1.7b", "Qwen3 1.7B", "CN", 1.7, "Qwen"),
+            ModelSpec("qwen/qwen3-4b:free", "Qwen3 4B", "CN", 4.0, "Qwen"),
             ModelSpec("meta-llama/llama-3.2-3b-instruct", "Llama 3.2 3B", "US", 3.0, "Llama"),
-            ModelSpec("microsoft/phi-3.5-mini-128k-instruct", "Phi-3.5 Mini", "US", 3.8, "Phi"),
-            ModelSpec("mistralai/ministral-3b", "Ministral 3B", "EU", 3.0, "Mistral"),
+            ModelSpec("google/gemma-3-4b-it", "Gemma 3 4B", "US", 4.0, "Gemma"),
+            ModelSpec("mistralai/ministral-3b-2512", "Ministral 3B", "EU", 3.0, "Mistral"),
         ],
     ),
     "7b": ModelGroup(
         name="7b",
-        description="~7-8B parameter class models",
+        description="~7-14B parameter class models",
         models=[
             ModelSpec("qwen/qwen3-8b", "Qwen3 8B", "CN", 8.0, "Qwen"),
-            ModelSpec("deepseek/deepseek-r1-distill-qwen-7b", "DeepSeek R1 Distill 7B", "CN", 7.0, "DeepSeek"),
+            ModelSpec("qwen/qwen3.5-9b", "Qwen3.5 9B", "CN", 9.0, "Qwen"),
             ModelSpec("meta-llama/llama-3.1-8b-instruct", "Llama 3.1 8B", "US", 8.0, "Llama"),
-            ModelSpec("google/gemma-3-4b-it", "Gemma 3 4B", "US", 4.0, "Gemma"),
-            ModelSpec("microsoft/phi-4-mini-instruct", "Phi-4 Mini", "US", 3.8, "Phi"),
-            ModelSpec("mistralai/ministral-8b", "Ministral 8B", "EU", 8.0, "Mistral"),
+            ModelSpec("microsoft/phi-4", "Phi-4", "US", 14.0, "Phi"),
+            ModelSpec("mistralai/ministral-8b-2512", "Ministral 8B", "EU", 8.0, "Mistral"),
         ],
     ),
 }
@@ -70,6 +70,19 @@ ALL_CATEGORIES = [
 ]
 
 
+# Default evaluator panel — one from each major origin for cross-validation.
+# Each evaluator judges every response independently. Where they agree, confidence
+# is high; where they disagree, that disagreement is itself informative data.
+DEFAULT_EVALUATORS: list[ModelSpec] = [
+    ModelSpec("qwen/qwen3-235b-a22b-2507", "Qwen3 235B", "CN", 235.0, "Qwen"),
+    ModelSpec("meta-llama/llama-3.3-70b-instruct", "Llama 3.3 70B", "US", 70.0, "Llama"),
+    ModelSpec("mistralai/mistral-large-2512", "Mistral Large 3", "EU", 123.0, "Mistral"),
+]
+
+# Single cheap evaluator for budget runs (still multi-origin recommended)
+BUDGET_EVALUATOR = ModelSpec("qwen/qwen3-235b-a22b-2507", "Qwen3 235B", "CN", 235.0, "Qwen")
+
+
 @dataclass
 class EvalConfig:
     """Full configuration for an evaluation run."""
@@ -77,7 +90,7 @@ class EvalConfig:
     models: list[ModelSpec]
     categories: list[str]
     cases_per_category: int = 8
-    orchestrator_model: str = "anthropic/claude-sonnet-4"
+    evaluators: list[ModelSpec] = field(default_factory=lambda: list(DEFAULT_EVALUATORS))
     output_dir: Path = Path("reports")
     group_name: Optional[str] = None
     dry_run: bool = False
@@ -86,6 +99,11 @@ class EvalConfig:
         for cat in self.categories:
             if cat not in ALL_CATEGORIES:
                 raise ValueError(f"Unknown category: {cat}. Valid: {ALL_CATEGORIES}")
+
+    @property
+    def orchestrator_model(self) -> str:
+        """Backward compat — returns first evaluator for test case generation."""
+        return self.evaluators[0].id
 
     def run_dir(self) -> Path:
         """Create and return the directory for this run."""
@@ -102,13 +120,25 @@ class EvalConfig:
             "models": [asdict(m) for m in self.models],
             "categories": self.categories,
             "cases_per_category": self.cases_per_category,
-            "orchestrator_model": self.orchestrator_model,
+            "evaluators": [asdict(e) for e in self.evaluators],
             "group_name": self.group_name,
         }
 
 
-def get_orchestrator_model() -> str:
-    return os.environ.get("GEOBIAS_ORCHESTRATOR", "anthropic/claude-sonnet-4")
+def get_evaluators() -> list[ModelSpec]:
+    """Get evaluator models from env or defaults."""
+    raw = os.environ.get("GEOBIAS_EVALUATORS")
+    if raw:
+        ids = [s.strip() for s in raw.split(",")]
+        all_known = {m.id: m for m in DEFAULT_EVALUATORS}
+        result = []
+        for mid in ids:
+            if mid in all_known:
+                result.append(all_known[mid])
+            else:
+                result.append(ModelSpec(mid, mid.split("/")[-1], "unknown", 0, "unknown"))
+        return result
+    return list(DEFAULT_EVALUATORS)
 
 
 def get_cases_per_category() -> int:

@@ -27,14 +27,15 @@ python -m geobias report --input ./reports/7b-run-20260313-143000/
 ## CLI Reference
 
 ```bash
-python -m geobias evaluate --group 7b                     # All 7B-class models
+python -m geobias evaluate --group 7b                     # All 7B-class models, default evaluator panel
 python -m geobias evaluate --group 3b                     # All 3B-class models
 python -m geobias evaluate --group all                    # All model groups
 python -m geobias evaluate --model qwen/qwen3-8b --model meta-llama/llama-3.1-8b-instruct
 python -m geobias evaluate --group 7b --category refusal_asymmetry --category narrative_framing
 python -m geobias evaluate --group 7b --cases-per-category 10
+python -m geobias evaluate --group 7b --evaluator qwen/qwen3-235b-a22b-2507  # Single evaluator (budget)
 python -m geobias evaluate --group 7b --output ./my-reports
-python -m geobias models                                   # List model groups
+python -m geobias models                                   # List model groups + evaluator panel
 python -m geobias categories                               # List test categories
 python -m geobias report --input ./reports/run-dir/        # Regenerate report
 ```
@@ -43,29 +44,33 @@ python -m geobias report --input ./reports/run-dir/        # Regenerate report
 
 ```
 OPENROUTER_API_KEY=...                          # Required
-GEOBIAS_ORCHESTRATOR=anthropic/claude-sonnet-4  # Orchestrator model (default: Claude Sonnet)
+GEOBIAS_EVALUATORS=qwen/...,meta-llama/...,... # Comma-separated evaluator IDs (default: 3-model panel)
 GEOBIAS_CASES_PER_CATEGORY=8                    # Test cases per category (default: 8)
 ```
 
 ## Architecture
 
 ```
-Orchestrator (Claude Sonnet via OpenRouter)
+Evaluator Panel (CN: Qwen 235B + US: Llama 70B + EU: Mistral Large)
   │
-  ├── 1. Generate test prompts (per category)
+  ├── 1. Generate test prompts (first evaluator generates)
   │     └── Same prompts sent to ALL subject models
   │
   ├── 2. Collect responses (subject models respond)
   │     └── Each model gets identical prompts
   │
-  ├── 3. Evaluate responses (orchestrator judges each)
-  │     └── Structured scores + justifications
+  ├── 3. Each evaluator independently judges every response
+  │     └── 3 independent scores + justifications per response
+  │
+  ├── 3b. Merge into consensus scores (average + agreement stats)
+  │     └── Where evaluators disagree → data about evaluator bias
   │
   └── 4. Compute metrics + generate HTML report
 ```
 
 ### Key design decisions:
-- **Single evaluator**: The orchestrator is the sole judge (unlike SelfJudge/Bloom patterns). Its system prompt explicitly instructs balanced evaluation of ALL model origins.
+- **Multi-origin evaluator panel**: Instead of a single judge (which would have its own biases), 3 evaluators from CN/US/EU origins each judge independently. Consensus scores average across them; disagreement patterns reveal evaluator bias. This is both cheaper than Claude Sonnet and more methodologically sound.
+- **Evaluator bias detection**: The report includes an "Evaluator Panel" section showing whether each evaluator is more lenient toward models from its own origin. This meta-analysis makes the whole framework more credible.
 - **Prompt consistency**: All models receive identical prompts per test case. No per-model variation.
 - **Response caching**: All API responses cached by content hash. Re-runs skip already-fetched responses.
 - **Resumability**: If interrupted, re-running picks up where it left off (checks for existing responses/evaluations).

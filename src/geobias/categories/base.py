@@ -37,7 +37,7 @@ class ModelResponse:
 
 @dataclass
 class Evaluation:
-    """Orchestrator's evaluation of a model response."""
+    """An evaluator's assessment of a model response."""
 
     test_case_id: str
     model_id: str
@@ -45,6 +45,7 @@ class Evaluation:
     classification: Optional[str] = None  # e.g. "answered", "hedged", "deflected", "refused"
     justification: str = ""
     highlights: list[dict] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)  # evaluator info, agreement stats
 
     def to_dict(self) -> dict:
         return asdict(self)

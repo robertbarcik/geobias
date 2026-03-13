@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import sys
 from pathlib import Path
@@ -12,10 +11,12 @@ import click
 
 from .config import (
     ALL_CATEGORIES,
+    DEFAULT_EVALUATORS,
     DEFAULT_MODEL_GROUPS,
     EvalConfig,
+    ModelSpec,
     get_cases_per_category,
-    get_orchestrator_model,
+    get_evaluators,
     resolve_models,
 )
 from .llm import estimate_cost
@@ -42,10 +43,11 @@ def cli():
 @click.option("--model", "model_ids", type=str, multiple=True, help="Specific model ID(s) to evaluate")
 @click.option("--category", "categories", type=str, multiple=True, help="Test categories to run")
 @click.option("--cases-per-category", type=int, default=None, help="Number of test cases per category")
+@click.option("--evaluator", "evaluator_ids", type=str, multiple=True, help="Evaluator model ID(s). Default: multi-origin panel (CN+US+EU)")
 @click.option("--output", type=click.Path(), default="reports", help="Output directory")
 @click.option("--dry-run", is_flag=True, help="Show plan and cost estimate without making API calls")
 @click.option("-v", "--verbose", is_flag=True, help="Verbose output")
-def evaluate(group, model_ids, categories, cases_per_category, output, dry_run, verbose):
+def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, output, dry_run, verbose):
     """Run a geopolitical bias evaluation."""
     setup_logging(verbose)
 
@@ -60,6 +62,18 @@ def evaluate(group, model_ids, categories, cases_per_category, output, dry_run, 
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
+    # Resolve evaluators
+    if evaluator_ids:
+        evaluators = []
+        known = {e.id: e for e in DEFAULT_EVALUATORS}
+        for eid in evaluator_ids:
+            if eid in known:
+                evaluators.append(known[eid])
+            else:
+                evaluators.append(ModelSpec(eid, eid.split("/")[-1], "unknown", 0, "unknown"))
+    else:
+        evaluators = get_evaluators()
+
     # Resolve categories
     cats = list(categories) if categories else ALL_CATEGORIES
 
@@ -70,7 +84,7 @@ def evaluate(group, model_ids, categories, cases_per_category, output, dry_run, 
         models=models,
         categories=cats,
         cases_per_category=cpc,
-        orchestrator_model=get_orchestrator_model(),
+        evaluators=evaluators,
         output_dir=Path(output),
         group_name=group,
         dry_run=dry_run,
@@ -80,19 +94,21 @@ def evaluate(group, model_ids, categories, cases_per_category, output, dry_run, 
     click.echo(f"\n{'='*60}")
     click.echo("GeoBias Evaluation Plan")
     click.echo(f"{'='*60}")
-    click.echo(f"\nOrchestrator: {config.orchestrator_model}")
-    click.echo(f"Categories:   {', '.join(cats)}")
+    click.echo(f"\nEvaluator panel ({len(evaluators)}):")
+    for e in evaluators:
+        click.echo(f"  {e.name:30s} [{e.origin}]  ({e.id})")
+    click.echo(f"\nCategories:   {', '.join(cats)}")
     click.echo(f"Cases/cat:    {cpc}")
-    click.echo(f"\nModels ({len(models)}):")
+    click.echo(f"\nSubject models ({len(models)}):")
     for m in models:
         click.echo(f"  {m.name:30s} [{m.origin}] {m.params_b}B  ({m.id})")
 
     # Cost estimate
-    cost = estimate_cost(len(models), len(cats), cpc)
+    cost = estimate_cost(len(models), len(cats), cpc, len(evaluators))
     click.echo(f"\nEstimated API calls: {cost['total_api_calls']}")
     click.echo(f"  - Test generation:  {cost['generation_calls']}")
     click.echo(f"  - Model responses:  {cost['response_calls']}")
-    click.echo(f"  - Evaluations:      {cost['evaluation_calls']}")
+    click.echo(f"  - Evaluations:      {cost['evaluation_calls']} ({len(evaluators)} evaluators × {cost['evaluation_calls'] // len(evaluators)} each)")
     click.echo(f"Estimated cost:      ~${cost['estimated_cost_usd']:.2f} ({cost['note']})")
 
     if dry_run:
@@ -134,10 +150,15 @@ def report(input_dir):
 @cli.command()
 def models():
     """List available model groups and models."""
+    click.echo("\nSubject model groups:")
     for group_name, group in DEFAULT_MODEL_GROUPS.items():
-        click.echo(f"\n{group_name}: {group.description}")
+        click.echo(f"\n  {group_name}: {group.description}")
         for m in group.models:
-            click.echo(f"  {m.name:30s} [{m.origin}] {m.params_b}B  ({m.id})")
+            click.echo(f"    {m.name:30s} [{m.origin}] {m.params_b}B  ({m.id})")
+
+    click.echo("\nDefault evaluator panel:")
+    for e in DEFAULT_EVALUATORS:
+        click.echo(f"    {e.name:30s} [{e.origin}] {e.params_b}B  ({e.id})")
 
 
 @cli.command()

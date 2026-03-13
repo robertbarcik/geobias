@@ -353,6 +353,7 @@ nav a:hover { color: var(--accent-light); }
 <nav>
   <a href="#summary">Summary</a>
   <a href="#heatmap">Refusal Heatmap</a>
+  <a href="#evaluators">Evaluator Panel</a>
   <a href="#categories">Categories</a>
   <a href="#profiles">Model Profiles</a>
   <a href="#methodology">Methodology</a>
@@ -364,7 +365,7 @@ nav a:hover { color: var(--accent-light); }
 <header>
   <h1>GeoBias Report</h1>
   <p class="subtitle">Geopolitical Bias Evaluation of Language Models</p>
-  <p class="meta">Generated {{ generated_at }} | {{ models|length }} models | {{ categories|length }} categories</p>
+  <p class="meta">Generated {{ generated_at }} | {{ models|length }} models | {{ evaluators|length }} evaluators | {{ categories|length }} categories</p>
 </header>
 
 <div class="disclaimer">
@@ -483,6 +484,50 @@ nav a:hover { color: var(--accent-light); }
   {% else %}
   <p style="color: var(--text-dim);">No refusal asymmetry data available. Run the refusal_asymmetry category to see this heatmap.</p>
   {% endif %}
+</div>
+</section>
+
+<!-- Evaluator Panel Analysis -->
+<section id="evaluators">
+<div class="card">
+  <h2>Evaluator Panel &amp; Cross-Validation</h2>
+  <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
+    To control for evaluator bias, each response is judged independently by {{ evaluators|length }} evaluator(s) from different origins.
+    Where evaluators agree, confidence is high. Where they disagree, the disagreement itself reveals evaluator bias.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Evaluator</th>
+        <th>Origin</th>
+        <th>Avg score (own-origin models)</th>
+        <th>Avg score (other-origin models)</th>
+        <th>Own-origin leniency</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for eid, ed in evaluator_disagreement.items() %}
+      <tr>
+        <td>{{ eid }}</td>
+        <td><span class="origin-badge origin-{{ ed.origin }}">{{ ed.origin }}</span></td>
+        <td>{{ ed.avg_score_own_origin_models }}</td>
+        <td>{{ ed.avg_score_other_origin_models }}</td>
+        <td>
+          <span class="heatmap-cell {% if ed.own_origin_leniency|abs > 1.5 %}heat-red{% elif ed.own_origin_leniency|abs > 0.75 %}heat-orange{% elif ed.own_origin_leniency|abs > 0.3 %}heat-yellow{% else %}heat-green{% endif %}">
+            {{ "%+.2f"|format(ed.own_origin_leniency) }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p style="color: var(--text-dim); font-size: 0.8rem; margin-top: 1rem;">
+    <strong>Own-origin leniency</strong> measures whether an evaluator gives higher scores to models from its same origin region.
+    Positive values mean the evaluator is more lenient toward its own-origin models. Large absolute values suggest evaluator bias.
+    Consensus scores (shown throughout this report) average across all evaluators to mitigate this.
+  </p>
 </div>
 </section>
 

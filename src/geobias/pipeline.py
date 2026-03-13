@@ -16,7 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 class EvaluationPipeline:
-    """Runs the full GeoBias evaluation pipeline."""
+    """Runs the full GeoBias evaluation pipeline.
+
+    Uses a panel of evaluator models from different origins (CN, US, EU) to
+    cross-validate assessments. Each evaluator judges every response independently.
+    The final scores are consensus-based: where evaluators agree, confidence is high;
+    where they disagree, the disagreement itself is informative data about evaluator bias.
+    """
 
     def __init__(self, config: EvalConfig):
         self.config = config
@@ -27,6 +33,9 @@ class EvaluationPipeline:
         # Storage
         self.test_cases: dict[str, list[TestCase]] = {}  # category -> cases
         self.responses: dict[str, list[ModelResponse]] = {}  # model_id -> responses
+        # evaluations keyed by evaluator_id -> list of Evaluation
+        self.evaluations_by_evaluator: dict[str, list[Evaluation]] = {}
+        # consensus evaluations (merged across evaluators)
         self.evaluations: list[Evaluation] = []
 
     async def run(self) -> Path:
@@ -34,11 +43,13 @@ class EvaluationPipeline:
         self._save_config()
 
         categories = get_categories(self.config.categories)
+        evaluators = self.config.evaluators
 
-        # Stage 1: Generate test cases
+        # Stage 1: Generate test cases (use first evaluator for generation)
         logger.info("Stage 1: Generating test cases...")
+        generator_model = evaluators[0].id
         for cat in categories:
-            cases = await self._generate_test_cases(cat)
+            cases = await self._generate_test_cases(cat, generator_model)
             self.test_cases[cat.name] = cases
             logger.info(f"  {cat.name}: {len(cases)} test cases generated")
         self._save_test_cases()
@@ -52,19 +63,29 @@ class EvaluationPipeline:
             logger.info(f"  {model.name}: {len(model_responses)} responses collected")
             self._save_responses(model)
 
-        # Stage 3: Evaluate responses
-        logger.info("Stage 3: Evaluating responses...")
-        for cat in categories:
-            cases = self.test_cases[cat.name]
-            for model in self.config.models:
-                model_responses = {r.test_case_id: r for r in self.responses[model.id]}
-                for case in cases:
-                    resp = model_responses.get(case.id)
-                    if not resp:
-                        continue
-                    evaluation = await self._evaluate_response(cat, case, model, resp.response)
-                    self.evaluations.append(evaluation)
-                logger.info(f"  {cat.name} × {model.name}: evaluated")
+        # Stage 3: Evaluate responses with each evaluator
+        logger.info(f"Stage 3: Evaluating responses with {len(evaluators)} evaluator(s)...")
+        for evaluator in evaluators:
+            logger.info(f"  Evaluator: {evaluator.name} [{evaluator.origin}]")
+            evaluator_evals = []
+            for cat in categories:
+                cases = self.test_cases[cat.name]
+                for model in self.config.models:
+                    model_responses = {r.test_case_id: r for r in self.responses[model.id]}
+                    for case in cases:
+                        resp = model_responses.get(case.id)
+                        if not resp:
+                            continue
+                        evaluation = await self._evaluate_response(
+                            cat, case, model, resp.response, evaluator
+                        )
+                        evaluator_evals.append(evaluation)
+                    logger.info(f"    {cat.name} × {model.name}: done")
+            self.evaluations_by_evaluator[evaluator.id] = evaluator_evals
+
+        # Stage 3b: Compute consensus evaluations
+        logger.info("Stage 3b: Computing evaluator consensus...")
+        self.evaluations = self._merge_evaluations()
         self._save_evaluations()
 
         # Stage 4: Compute metrics
@@ -75,9 +96,8 @@ class EvaluationPipeline:
         logger.info(f"Pipeline complete. Results in: {self.run_dir}")
         return self.run_dir
 
-    async def _generate_test_cases(self, category) -> list[TestCase]:
-        """Use the orchestrator to generate test cases for a category."""
-        # Check for cached test cases
+    async def _generate_test_cases(self, category, generator_model: str) -> list[TestCase]:
+        """Use the first evaluator to generate test cases for a category."""
         cache_file = self.run_dir / "test_cases.json"
         if cache_file.exists():
             existing = json.loads(cache_file.read_text())
@@ -86,7 +106,7 @@ class EvaluationPipeline:
 
         messages = category.generation_prompt(self.config.cases_per_category)
         response = await self.client.complete(
-            model=self.config.orchestrator_model,
+            model=generator_model,
             messages=messages,
             temperature=0.7,
             max_tokens=8192,
@@ -95,7 +115,6 @@ class EvaluationPipeline:
 
     async def _collect_responses(self, model: ModelSpec, cases: list[TestCase]) -> list[ModelResponse]:
         """Collect responses from a subject model for all test cases."""
-        # Check for cached responses
         resp_file = self.run_dir / "responses" / f"{model.safe_filename()}.json"
         if resp_file.exists():
             existing = json.loads(resp_file.read_text())
@@ -109,7 +128,6 @@ class EvaluationPipeline:
         if not remaining:
             return cached
 
-        # Process in batches
         batch_size = 5
         new_responses = []
         for i in range(0, len(remaining), batch_size):
@@ -127,8 +145,7 @@ class EvaluationPipeline:
                 else:
                     new_responses.append(result)
 
-        all_responses = cached + new_responses
-        return all_responses
+        return cached + new_responses
 
     async def _get_model_response(self, model: ModelSpec, case: TestCase) -> ModelResponse:
         """Get a single model's response to a test case."""
@@ -149,25 +166,112 @@ class EvaluationPipeline:
             usage=response.usage,
         )
 
-    async def _evaluate_response(self, category, case: TestCase, model: ModelSpec, response_text: str) -> Evaluation:
-        """Use the orchestrator to evaluate a model's response."""
+    async def _evaluate_response(
+        self, category, case: TestCase, model: ModelSpec, response_text: str, evaluator: ModelSpec
+    ) -> Evaluation:
+        """Use a specific evaluator to evaluate a model's response."""
         messages = category.evaluation_prompt(case, response_text)
         try:
             resp = await self.client.complete(
-                model=self.config.orchestrator_model,
+                model=evaluator.id,
                 messages=messages,
                 temperature=0.0,
                 max_tokens=4096,
             )
-            return category.parse_evaluation(case.id, model.id, resp.content)
+            ev = category.parse_evaluation(case.id, model.id, resp.content)
+            ev.metadata = {"evaluator_id": evaluator.id, "evaluator_origin": evaluator.origin}
+            return ev
         except Exception as e:
-            logger.warning(f"Evaluation parse error for {model.id}/{case.id}: {e}")
+            logger.warning(f"Evaluation parse error ({evaluator.name}) for {model.id}/{case.id}: {e}")
             return Evaluation(
                 test_case_id=case.id,
                 model_id=model.id,
                 scores={},
-                justification=f"[Evaluation error: {e}]",
+                justification=f"[Evaluation error from {evaluator.name}: {e}]",
+                metadata={"evaluator_id": evaluator.id, "evaluator_origin": evaluator.origin},
             )
+
+    def _merge_evaluations(self) -> list[Evaluation]:
+        """Merge evaluations from multiple evaluators into consensus evaluations.
+
+        For each (test_case_id, model_id) pair, average numeric scores across evaluators
+        and track per-evaluator details for disagreement analysis.
+        """
+        # Group by (test_case_id, model_id)
+        grouped: dict[tuple[str, str], list[Evaluation]] = {}
+        for evaluator_id, evals in self.evaluations_by_evaluator.items():
+            for ev in evals:
+                key = (ev.test_case_id, ev.model_id)
+                grouped.setdefault(key, []).append(ev)
+
+        consensus = []
+        for (tc_id, model_id), evals in grouped.items():
+            # Average numeric scores
+            all_score_keys = set()
+            for ev in evals:
+                all_score_keys.update(ev.scores.keys())
+
+            merged_scores = {}
+            for key in all_score_keys:
+                values = [ev.scores[key] for ev in evals if key in ev.scores and isinstance(ev.scores[key], (int, float))]
+                if values:
+                    merged_scores[key] = round(sum(values) / len(values), 2)
+
+            # Majority vote for classification
+            classifications = [ev.classification for ev in evals if ev.classification]
+            if classifications:
+                majority_cls = max(set(classifications), key=classifications.count)
+            else:
+                majority_cls = None
+
+            # Collect all justifications
+            justifications = [ev.justification for ev in evals if ev.justification]
+            merged_justification = " | ".join(justifications) if justifications else ""
+
+            # All highlights
+            all_highlights = []
+            for ev in evals:
+                all_highlights.extend(ev.highlights)
+
+            # Per-evaluator breakdown for disagreement analysis
+            per_evaluator = {}
+            for ev in evals:
+                meta = getattr(ev, "metadata", {}) or {}
+                eid = meta.get("evaluator_id", "unknown")
+                per_evaluator[eid] = {
+                    "scores": ev.scores,
+                    "classification": ev.classification,
+                    "origin": meta.get("evaluator_origin", "unknown"),
+                }
+
+            # Compute evaluator agreement (std dev of overall scores)
+            score_lists = {}
+            for ev in evals:
+                for k, v in ev.scores.items():
+                    if isinstance(v, (int, float)):
+                        score_lists.setdefault(k, []).append(v)
+            agreement = {}
+            for k, vals in score_lists.items():
+                if len(vals) > 1:
+                    mean = sum(vals) / len(vals)
+                    variance = sum((v - mean) ** 2 for v in vals) / len(vals)
+                    agreement[k] = round(variance ** 0.5, 2)  # std dev
+
+            consensus.append(Evaluation(
+                test_case_id=tc_id,
+                model_id=model_id,
+                scores=merged_scores,
+                classification=majority_cls,
+                justification=merged_justification,
+                highlights=all_highlights,
+                metadata={
+                    "per_evaluator": per_evaluator,
+                    "evaluator_agreement_stddev": agreement,
+                    "num_evaluators": len(evals),
+                },
+            ))
+
+        return consensus
 
     def _compute_metrics(self) -> dict:
         """Compute comparative metrics across models."""
@@ -176,7 +280,14 @@ class EvaluationPipeline:
             "per_category": {},
             "refusal_matrix": {},
             "bias_asymmetry": {},
+            "evaluator_disagreement": {},
         }
+
+        # Build test case lookup for efficient region mapping
+        tc_lookup: dict[str, TestCase] = {}
+        for cases in self.test_cases.values():
+            for tc in cases:
+                tc_lookup[tc.id] = tc
 
         # Per-model aggregates
         for model in self.config.models:
@@ -197,7 +308,6 @@ class EvaluationPipeline:
                 "classifications": {},
             }
 
-            # Classification distribution
             for ev in model_evals:
                 cls = ev.classification or "unknown"
                 metrics["per_model"][model.id]["classifications"][cls] = (
@@ -206,12 +316,8 @@ class EvaluationPipeline:
 
         # Per-category aggregates
         for cat_name in self.config.categories:
-            cat_evals = [e for e in self.evaluations if any(
-                tc.id == e.test_case_id
-                for cases in self.test_cases.values()
-                for tc in cases
-                if tc.category == cat_name
-            )]
+            cat_case_ids = {tc.id for tc in self.test_cases.get(cat_name, [])}
+            cat_evals = [e for e in self.evaluations if e.test_case_id in cat_case_ids]
             per_model = {}
             for model in self.config.models:
                 model_cat_evals = [e for e in cat_evals if e.model_id == model.id]
@@ -226,7 +332,7 @@ class EvaluationPipeline:
                 }
             metrics["per_category"][cat_name] = per_model
 
-        # Refusal matrix (for refusal_asymmetry category)
+        # Refusal matrix
         if "refusal_asymmetry" in self.config.categories:
             cases_by_region = {}
             for tc in self.test_cases.get("refusal_asymmetry", []):
@@ -247,7 +353,7 @@ class EvaluationPipeline:
                     model_matrix[region] = classification_counts
                 metrics["refusal_matrix"][model.id] = model_matrix
 
-        # Bias asymmetry — compare how each model treats its "own" region vs others
+        # Bias asymmetry
         for model in self.config.models:
             if model.origin == "unknown":
                 continue
@@ -256,13 +362,7 @@ class EvaluationPipeline:
             for ev in self.evaluations:
                 if ev.model_id != model.id:
                     continue
-                # Find the test case to get its target_region
-                tc = None
-                for cases in self.test_cases.values():
-                    for c in cases:
-                        if c.id == ev.test_case_id:
-                            tc = c
-                            break
+                tc = tc_lookup.get(ev.test_case_id)
                 if not tc or not tc.target_region:
                     continue
                 if tc.target_region == model.origin:
@@ -282,6 +382,37 @@ class EvaluationPipeline:
                 "own_region_count": len(own_region_evals),
                 "other_region_count": len(other_region_evals),
                 "asymmetry": round(avg_scores(other_region_evals) - avg_scores(own_region_evals), 2),
+            }
+
+        # Evaluator disagreement analysis
+        for evaluator_id, evals in self.evaluations_by_evaluator.items():
+            evaluator_origin = "unknown"
+            for e in self.config.evaluators:
+                if e.id == evaluator_id:
+                    evaluator_origin = e.origin
+                    break
+
+            # Does this evaluator score models from its own origin higher?
+            own_origin_scores = []
+            other_origin_scores = []
+            for ev in evals:
+                subject_model = next((m for m in self.config.models if m.id == ev.model_id), None)
+                if not subject_model:
+                    continue
+                numeric = [v for v in ev.scores.values() if isinstance(v, (int, float))]
+                if subject_model.origin == evaluator_origin:
+                    own_origin_scores.extend(numeric)
+                else:
+                    other_origin_scores.extend(numeric)
+
+            own_avg = round(sum(own_origin_scores) / len(own_origin_scores), 2) if own_origin_scores else 0
+            other_avg = round(sum(other_origin_scores) / len(other_origin_scores), 2) if other_origin_scores else 0
+
+            metrics["evaluator_disagreement"][evaluator_id] = {
+                "origin": evaluator_origin,
+                "avg_score_own_origin_models": own_avg,
+                "avg_score_other_origin_models": other_avg,
+                "own_origin_leniency": round(own_avg - other_avg, 2),
             }
 
         return metrics
@@ -305,9 +436,18 @@ class EvaluationPipeline:
         path.write_text(json.dumps(data, indent=2))
 
     def _save_evaluations(self):
+        # Save consensus evaluations
         path = self.run_dir / "evaluations.json"
         data = [e.to_dict() for e in self.evaluations]
         path.write_text(json.dumps(data, indent=2))
+
+        # Save per-evaluator raw evaluations
+        eval_dir = self.run_dir / "evaluations_per_evaluator"
+        eval_dir.mkdir(exist_ok=True)
+        for evaluator_id, evals in self.evaluations_by_evaluator.items():
+            safe_name = evaluator_id.replace("/", "--")
+            path = eval_dir / f"{safe_name}.json"
+            path.write_text(json.dumps([e.to_dict() for e in evals], indent=2))
 
     def _save_metrics(self, metrics: dict):
         path = self.run_dir / "metrics.json"

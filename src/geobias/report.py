@@ -97,11 +97,17 @@ def generate_report(run_dir: Path) -> Path:
     )
     template = env.get_template("report.html")
 
+    # Build evaluator panel info
+    evaluators = [ModelSpec(**e) for e in data["config"].get("evaluators", [])]
+    evaluator_disagreement = metrics.get("evaluator_disagreement", {})
+
     html = template.render(
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         run_dir=str(run_dir),
         models=models,
         categories=categories,
+        evaluators=evaluators,
+        evaluator_disagreement=evaluator_disagreement,
         summary=summary,
         refusal_heatmap=refusal_heatmap,
         category_details=category_details,

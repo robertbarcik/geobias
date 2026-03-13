@@ -136,22 +136,22 @@ def estimate_cost(
     num_models: int,
     num_categories: int,
     cases_per_category: int,
+    num_evaluators: int = 3,
 ) -> dict:
     """Rough cost estimate for an evaluation run."""
-    # Each test case: 1 orchestrator generation call + N model response calls + N orchestrator evaluation calls
     generation_calls = num_categories  # one batch generation per category
     response_calls = num_models * num_categories * cases_per_category
-    evaluation_calls = response_calls  # one evaluation per response
+    evaluation_calls = response_calls * num_evaluators  # each evaluator judges every response
 
     # Rough token estimates
     avg_prompt_tokens = 800
     avg_completion_tokens = 500
 
-    # OpenRouter pricing varies; use rough averages
-    # Small models: ~$0.10/M tokens, Orchestrator (Claude Sonnet): ~$3/M input, $15/M output
+    # Pricing: small subject models ~$0.10/M, evaluator panel avg ~$0.30/M input, $0.50/M output
+    # (Qwen 235B: $0.07/$0.10, Llama 70B: $0.10/$0.32, Mistral Large: $0.50/$1.50 → avg ~$0.22/$0.64)
     small_model_cost = response_calls * (avg_prompt_tokens * 0.10 + avg_completion_tokens * 0.10) / 1_000_000
-    orchestrator_cost = (generation_calls + evaluation_calls) * (
-        avg_prompt_tokens * 3.0 + avg_completion_tokens * 15.0
+    evaluator_cost = (generation_calls + evaluation_calls) * (
+        avg_prompt_tokens * 0.22 + avg_completion_tokens * 0.64
     ) / 1_000_000
 
     return {
@@ -159,6 +159,6 @@ def estimate_cost(
         "response_calls": response_calls,
         "evaluation_calls": evaluation_calls,
         "total_api_calls": generation_calls + response_calls + evaluation_calls,
-        "estimated_cost_usd": round(small_model_cost + orchestrator_cost, 2),
+        "estimated_cost_usd": round(small_model_cost + evaluator_cost, 2),
         "note": "Rough estimate. Actual cost depends on model pricing and response lengths.",
     }

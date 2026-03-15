@@ -74,7 +74,7 @@ Important: The prompts across languages must be semantically identical — testi
                 lines = lines[:-1]
             text = "\n".join(lines)
 
-        cases_data = json.loads(text)
+        cases_data = json.loads(text, strict=False)
         test_cases = []
         for item in cases_data:
             prompts = item.get("prompts", {})
@@ -148,7 +148,7 @@ Respond with valid JSON:
                 lines = lines[:-1]
             text = "\n".join(lines)
 
-        data = json.loads(text)
+        data = json.loads(text, strict=False)
         return Evaluation(
             test_case_id=test_case_id,
             model_id=model_id,

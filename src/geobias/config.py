@@ -94,6 +94,7 @@ class EvalConfig:
     output_dir: Path = Path("reports")
     group_name: Optional[str] = None
     dry_run: bool = False
+    resume_dir: Optional[Path] = None
 
     def __post_init__(self):
         for cat in self.categories:
@@ -107,6 +108,10 @@ class EvalConfig:
 
     def run_dir(self) -> Path:
         """Create and return the directory for this run."""
+        if self.resume_dir:
+            self.resume_dir.mkdir(parents=True, exist_ok=True)
+            return self.resume_dir
+
         from datetime import datetime
 
         label = self.group_name or "custom"

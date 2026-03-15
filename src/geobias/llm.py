@@ -25,7 +25,7 @@ class LLMResponse:
 class LLMClient:
     """Async OpenRouter client with response caching and rate limiting."""
 
-    def __init__(self, cache_dir: Optional[Path] = None, requests_per_minute: int = 30):
+    def __init__(self, cache_dir: Optional[Path] = None, requests_per_minute: int = 200):
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
             raise RuntimeError("OPENROUTER_API_KEY environment variable is required")
@@ -36,7 +36,7 @@ class LLMClient:
         )
         self.cache_dir = cache_dir
         self.rpm_limit = requests_per_minute
-        self._semaphore = asyncio.Semaphore(5)  # max concurrent requests
+        self._semaphore = asyncio.Semaphore(20)  # max concurrent requests
         self._last_request_time = 0.0
         self._min_interval = 60.0 / requests_per_minute
 
@@ -129,7 +129,7 @@ class LLMClient:
             if lines and lines[-1].strip() == "```":
                 lines = lines[:-1]
             text = "\n".join(lines)
-        return json.loads(text)
+        return json.loads(text, strict=False)
 
 
 def estimate_cost(

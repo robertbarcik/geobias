@@ -6,536 +6,982 @@
 <title>GeoBias Report</title>
 <style>
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #242736;
-  --border: #2e3245;
+  --bg: #0a0c14;
+  --surface: #12151f;
+  --surface2: #1a1e2e;
+  --surface3: #222840;
+  --border: #2a3050;
   --text: #e4e6f0;
-  --text-dim: #8b8fa3;
+  --text-dim: #7a7f9a;
+  --text-muted: #50556a;
   --accent: #6c7bf0;
   --accent-light: #8b96f5;
+  --accent-glow: rgba(108,123,240,0.15);
   --green: #4caf7c;
+  --green-dim: rgba(76,175,124,0.15);
   --yellow: #e6b84d;
+  --yellow-dim: rgba(230,184,77,0.15);
   --orange: #e68a4d;
+  --orange-dim: rgba(230,138,77,0.15);
   --red: #e6534d;
-  --cn-color: #e05555;
-  --us-color: #5577cc;
-  --eu-color: #55aa77;
+  --red-dim: rgba(230,83,77,0.15);
+  --cn: #e05555;
+  --cn-dim: rgba(224,85,85,0.12);
+  --cn-bg: rgba(224,85,85,0.08);
+  --us: #5577cc;
+  --us-dim: rgba(85,119,204,0.12);
+  --us-bg: rgba(85,119,204,0.08);
+  --eu: #55aa77;
+  --eu-dim: rgba(85,170,119,0.12);
+  --eu-bg: rgba(85,170,119,0.08);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.6;
-}
+/* --- NAV --- */
+nav { position: sticky; top: 0; background: rgba(10,12,20,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); z-index: 100; padding: 0.5rem 0; }
+nav .container { display: flex; gap: 0.25rem; overflow-x: auto; }
+nav a { color: var(--text-dim); text-decoration: none; padding: 0.5rem 0.75rem; font-size: 0.82rem; border-radius: 6px; white-space: nowrap; transition: all 0.15s; }
+nav a:hover { color: var(--text); background: var(--surface2); }
 
-.container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+/* --- HERO --- */
+.hero { text-align: center; padding: 4rem 0 3rem; }
+.hero h1 { font-size: 3rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.75rem; background: linear-gradient(135deg, var(--cn), var(--accent), var(--eu)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.hero .subtitle { font-size: 1.15rem; color: var(--text-dim); max-width: 700px; margin: 0 auto 2rem; line-height: 1.7; }
+.hero .meta { color: var(--text-muted); font-size: 0.85rem; }
 
-header {
-  text-align: center;
-  padding: 3rem 0 2rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 2rem;
-}
+/* --- CARDS --- */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; margin-bottom: 2rem; }
+.card h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text); }
+.card h2 .dim { color: var(--text-dim); font-weight: 400; font-size: 0.9rem; margin-left: 0.5rem; }
+.card .card-subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1.5rem; line-height: 1.6; }
+.card h3 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem; }
 
-header h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, var(--accent), var(--accent-light));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
+/* --- SECTION HEADERS --- */
+.section-header { padding: 3rem 0 1rem; }
+.section-header h2 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.25rem; }
+.section-header .section-num { color: var(--accent); font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
 
-header .subtitle { color: var(--text-dim); font-size: 1.1rem; }
-header .meta { color: var(--text-dim); font-size: 0.85rem; margin-top: 1rem; }
+/* --- BADGES --- */
+.badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.badge-CN { background: var(--cn-dim); color: var(--cn); }
+.badge-US { background: var(--us-dim); color: var(--us); }
+.badge-EU { background: var(--eu-dim); color: var(--eu); }
+.badge-unknown { background: rgba(139,143,163,0.15); color: var(--text-dim); }
+.badge-severity-high { background: var(--red-dim); color: var(--red); }
+.badge-severity-medium { background: var(--yellow-dim); color: var(--yellow); }
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-}
+/* --- STAT GRID --- */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.stat-box { background: var(--surface2); border-radius: 12px; padding: 1.25rem; text-align: center; }
+.stat-box .value { font-size: 2.2rem; font-weight: 800; color: var(--accent); line-height: 1.2; }
+.stat-box .label { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.25rem; }
 
-.card h2 {
-  font-size: 1.3rem;
-  margin-bottom: 1rem;
-  color: var(--accent-light);
-}
+/* --- INTRO CARDS --- */
+.intro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0; }
+.intro-card { background: var(--surface2); border-radius: 12px; padding: 1.5rem; border-left: 3px solid var(--accent); }
+.intro-card h4 { font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--accent-light); }
+.intro-card p { font-size: 0.88rem; color: var(--text-dim); line-height: 1.6; }
 
-.card h3 { font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--text); }
+/* --- ORIGIN × TOPIC MATRIX --- */
+.matrix-table { width: 100%; border-collapse: separate; border-spacing: 4px; margin: 1rem 0; }
+.matrix-table th { padding: 0.75rem; font-size: 0.78rem; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; }
+.matrix-table td { padding: 0; text-align: center; }
+.matrix-cell { display: block; padding: 1rem 0.5rem; border-radius: 10px; font-weight: 700; font-size: 1.3rem; transition: transform 0.15s; }
+.matrix-cell:hover { transform: scale(1.05); }
+.matrix-cell .sub { display: block; font-size: 0.72rem; font-weight: 400; opacity: 0.7; margin-top: 2px; }
+.matrix-label { text-align: right; padding-right: 1rem; font-weight: 600; font-size: 0.9rem; }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
+/* --- TABLES --- */
+table.data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+table.data-table th { padding: 0.75rem; text-align: left; border-bottom: 2px solid var(--border); color: var(--text-dim); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+table.data-table td { padding: 0.75rem; border-bottom: 1px solid rgba(42,48,80,0.5); }
+table.data-table tr:hover td { background: rgba(108,123,240,0.04); }
 
-.stat-box {
-  background: var(--surface2);
-  border-radius: 8px;
-  padding: 1rem;
-  text-align: center;
-}
+/* --- SCORE INDICATORS --- */
+.score-pill { display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; }
+.score-good { background: var(--green-dim); color: var(--green); }
+.score-ok { background: var(--yellow-dim); color: var(--yellow); }
+.score-warn { background: var(--orange-dim); color: var(--orange); }
+.score-bad { background: var(--red-dim); color: var(--red); }
 
-.stat-box .value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--accent);
-}
+/* --- BAR CHARTS --- */
+.bar-chart { margin: 1rem 0; }
+.bar-row { display: flex; align-items: center; margin-bottom: 6px; gap: 0.75rem; }
+.bar-label { width: 160px; font-size: 0.85rem; text-align: right; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.bar-track { flex: 1; height: 28px; background: var(--surface2); border-radius: 6px; overflow: hidden; position: relative; }
+.bar-value { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 10px; font-size: 0.8rem; font-weight: 700; color: white; min-width: 35px; transition: width 0.4s ease; }
 
-.stat-box .label { font-size: 0.85rem; color: var(--text-dim); }
+/* --- REFUSAL HEATMAP --- */
+.refusal-bar { display: flex; gap: 1px; height: 28px; border-radius: 6px; overflow: hidden; }
+.refusal-bar > div { transition: width 0.3s; }
 
-/* Origin badges */
-.origin-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-.origin-CN { background: rgba(224,85,85,0.2); color: var(--cn-color); }
-.origin-US { background: rgba(85,119,204,0.2); color: var(--us-color); }
-.origin-EU { background: rgba(85,170,119,0.2); color: var(--eu-color); }
-.origin-unknown { background: rgba(139,143,163,0.2); color: var(--text-dim); }
+/* --- FINDINGS --- */
+.finding { background: var(--surface2); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; border-left: 3px solid var(--accent); }
+.finding.severity-high { border-left-color: var(--red); }
+.finding.severity-medium { border-left-color: var(--yellow); }
+.finding h4 { font-size: 0.95rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+.finding p { font-size: 0.88rem; color: var(--text-dim); line-height: 1.65; }
 
-/* Tables */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
+/* --- EXAMPLE CARDS --- */
+.example-card { background: var(--surface2); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; border: 1px solid var(--border); }
+.example-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+.example-header .model-info { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; }
+.example-prompt { color: var(--text-dim); font-size: 0.88rem; padding: 0.75rem; background: var(--surface); border-radius: 8px; margin-bottom: 0.75rem; font-style: italic; }
+.example-response { font-size: 0.88rem; white-space: pre-wrap; max-height: 180px; overflow-y: hidden; position: relative; line-height: 1.6; color: var(--text); }
+.example-response.empty-response { color: var(--red); font-style: italic; opacity: 0.7; max-height: none; }
+.evaluator-panel-detail { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.evaluator-judgment { background: var(--surface); border-radius: 8px; padding: 0.75rem; border-left: 3px solid var(--border); }
+.evaluator-judgment-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; font-size: 0.82rem; }
+.evaluator-judgment-text { font-size: 0.82rem; color: var(--text-dim); line-height: 1.5; }
+.empty-response-callout { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--orange); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+.empty-response-callout h4 { color: var(--orange); margin-bottom: 0.5rem; font-size: 0.95rem; }
+.empty-response-callout p { font-size: 0.88rem; color: var(--text-dim); line-height: 1.6; }
+.empty-response-model { margin-top: 0.75rem; padding: 0.75rem; background: var(--surface); border-radius: 6px; }
+.empty-response-model h5 { font-size: 0.88rem; margin-bottom: 0.35rem; }
+.empty-response-model .pattern-tag { font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
+.pattern-censorship { background: var(--red-dim); color: var(--red); }
+.pattern-language { background: var(--yellow-dim); color: var(--yellow); }
+.evaluator-warning { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--yellow); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.5rem; font-size: 0.82rem; color: var(--text-dim); }
+.example-response.expanded { max-height: none; }
+.example-response .fade { position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background: linear-gradient(transparent, var(--surface2)); pointer-events: none; }
+.example-eval { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); font-size: 0.82rem; color: var(--text-dim); }
 
-th, td {
-  padding: 0.75rem;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
-}
+.expand-btn { background: var(--surface3); color: var(--text-dim); border: 1px solid var(--border); padding: 4px 14px; border-radius: 6px; cursor: pointer; font-size: 0.78rem; margin-top: 0.5rem; transition: all 0.15s; }
+.expand-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
-th {
-  color: var(--text-dim);
-  font-weight: 600;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-/* Heatmap cells */
-.heatmap-cell {
-  display: inline-block;
-  width: 100%;
-  padding: 0.5rem;
-  border-radius: 4px;
-  text-align: center;
-  font-weight: 600;
-  font-size: 0.85rem;
-}
-
-.heat-green { background: rgba(76,175,124,0.3); color: var(--green); }
-.heat-yellow { background: rgba(230,184,77,0.3); color: var(--yellow); }
-.heat-orange { background: rgba(230,138,77,0.3); color: var(--orange); }
-.heat-red { background: rgba(230,83,77,0.3); color: var(--red); }
-
-/* Score bar */
-.score-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.score-bar .bar {
-  flex: 1;
-  height: 8px;
-  background: var(--surface2);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.score-bar .bar-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.3s;
-}
-
-/* Collapsible sections */
-.collapsible {
-  cursor: pointer;
-  user-select: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.collapsible::after {
-  content: '\25BC';
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  transition: transform 0.2s;
-}
-
-.collapsible.collapsed::after { transform: rotate(-90deg); }
-.collapsible-content { overflow: hidden; }
-.collapsible-content.hidden { display: none; }
-
-/* Example cards */
-.example {
-  background: var(--surface2);
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  border-left: 3px solid var(--accent);
-}
-
-.example .prompt { color: var(--text-dim); font-style: italic; margin-bottom: 0.5rem; }
-.example .response {
-  font-size: 0.9rem;
-  white-space: pre-wrap;
-  max-height: 200px;
-  overflow-y: hidden;
-  position: relative;
-}
-.example .response.expanded { max-height: none; }
-.example .response .fade {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(transparent, var(--surface2));
-}
-
-.expand-btn {
-  background: var(--accent);
-  color: white;
-  border: none;
-  padding: 4px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  margin-top: 0.5rem;
-}
-.expand-btn:hover { background: var(--accent-light); }
-
-/* Charts container */
-.chart-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
-  margin: 1rem 0;
-}
-
-.bar-chart { padding: 0.5rem 0; }
-.bar-chart .bar-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.5rem;
-  gap: 0.5rem;
-}
-.bar-chart .bar-label {
-  width: 140px;
-  font-size: 0.85rem;
-  text-align: right;
-  flex-shrink: 0;
-}
-.bar-chart .bar-track {
-  flex: 1;
-  height: 24px;
-  background: var(--surface2);
-  border-radius: 4px;
-  overflow: hidden;
-  position: relative;
-}
-.bar-chart .bar-value {
-  height: 100%;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  padding-left: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: white;
-  min-width: 30px;
-}
-
-/* Model profile cards */
-.profile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 1rem;
-}
-.profile-card {
-  background: var(--surface2);
-  border-radius: 8px;
-  padding: 1.25rem;
-}
-.profile-card h4 { margin-bottom: 0.75rem; }
-.profile-stat {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.25rem 0;
-  font-size: 0.9rem;
-}
-.profile-stat .label { color: var(--text-dim); }
-
-/* Tabs */
-.tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
-.tab {
-  padding: 0.75rem 1.25rem;
-  cursor: pointer;
-  color: var(--text-dim);
-  border-bottom: 2px solid transparent;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-}
+/* --- TABS --- */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; overflow-x: auto; }
+.tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; font-size: 0.88rem; transition: all 0.15s; white-space: nowrap; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--accent-light); border-bottom-color: var(--accent); }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 
-/* Nav */
-nav {
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  z-index: 100;
-  padding: 0.5rem 2rem;
-}
-nav a {
-  color: var(--text-dim);
-  text-decoration: none;
-  padding: 0.5rem 1rem;
-  font-size: 0.85rem;
-}
-nav a:hover { color: var(--accent-light); }
+/* --- PROFILE CARDS --- */
+.profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.25rem; }
+.profile-card { background: var(--surface2); border-radius: 12px; padding: 1.5rem; border-top: 3px solid var(--accent); }
+.profile-card.origin-CN { border-top-color: var(--cn); }
+.profile-card.origin-US { border-top-color: var(--us); }
+.profile-card.origin-EU { border-top-color: var(--eu); }
+.profile-card h4 { font-size: 1.05rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+.profile-stat { display: flex; justify-content: space-between; padding: 0.3rem 0; font-size: 0.88rem; }
+.profile-stat .label { color: var(--text-dim); }
+.mini-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.mini-bar .mini-label { width: 100px; font-size: 0.72rem; color: var(--text-dim); text-align: right; }
+.mini-bar .mini-track { flex: 1; height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; }
+.mini-bar .mini-fill { height: 100%; border-radius: 3px; }
+.mini-bar .mini-val { width: 28px; font-size: 0.72rem; text-align: right; }
 
-/* Download button */
-.download-btn {
-  background: var(--surface2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.download-btn:hover { background: var(--border); }
+/* --- COLLAPSIBLE --- */
+.collapsible { cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; }
+.collapsible::after { content: '\25BC'; font-size: 0.7rem; color: var(--text-dim); transition: transform 0.2s; }
+.collapsible.collapsed::after { transform: rotate(-90deg); }
+.collapsible-content.hidden { display: none; }
 
-/* Disclaimer */
-.disclaimer {
-  background: rgba(230,184,77,0.1);
-  border: 1px solid rgba(230,184,77,0.3);
-  border-radius: 8px;
-  padding: 1rem;
-  font-size: 0.85rem;
-  color: var(--yellow);
-  margin-bottom: 1.5rem;
-}
+/* --- METHODOLOGY --- */
+.method-prompt { background: var(--surface2); padding: 1.25rem; border-radius: 10px; font-size: 0.82rem; white-space: pre-wrap; font-family: 'SF Mono', Menlo, monospace; line-height: 1.6; color: var(--text-dim); }
 
-/* Responsive */
+/* --- DOWNLOAD --- */
+.download-btn { background: var(--surface2); color: var(--text); border: 1px solid var(--border); padding: 0.75rem 1.5rem; border-radius: 10px; cursor: pointer; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.15s; }
+.download-btn:hover { background: var(--accent); border-color: var(--accent); }
+
+/* --- PARTIAL BANNER --- */
+.partial-banner { background: var(--accent-glow); border: 1px solid rgba(108,123,240,0.3); border-radius: 12px; padding: 1.25rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; }
+.partial-banner .icon { font-size: 1.5rem; }
+.partial-banner p { color: var(--accent-light); font-size: 0.9rem; }
+
+/* --- DISCLAIMER --- */
+.disclaimer { background: var(--yellow-dim); border: 1px solid rgba(230,184,77,0.2); border-radius: 12px; padding: 1rem 1.25rem; font-size: 0.82rem; color: var(--yellow); margin-bottom: 2rem; }
+
+/* --- FOOTER --- */
+footer { text-align: center; padding: 3rem 0; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+
+/* --- RESPONSIVE --- */
 @media (max-width: 768px) {
-  .container { padding: 1rem; }
-  header h1 { font-size: 1.8rem; }
-  .summary-grid { grid-template-columns: 1fr 1fr; }
+  .container { padding: 0 1rem; }
+  .hero h1 { font-size: 2rem; }
+  .intro-grid { grid-template-columns: 1fr; }
   .profile-grid { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .bar-label { width: 100px; font-size: 0.75rem; }
 }
 </style>
 </head>
 <body>
 
 <nav>
-  <a href="#summary">Summary</a>
-  <a href="#heatmap">Refusal Heatmap</a>
-  <a href="#evaluators">Evaluator Panel</a>
-  <a href="#categories">Categories</a>
-  <a href="#profiles">Model Profiles</a>
-  <a href="#methodology">Methodology</a>
-  <a href="#data">Raw Data</a>
+  <div class="container">
+    <a href="#intro">Introduction</a>
+    <a href="#findings">Key Findings</a>
+    <a href="#matrix">Origin × Topic Matrix</a>
+    <a href="#heatmap">Refusal Heatmap</a>
+    <a href="#evaluators">Evaluator Panel</a>
+    <a href="#extremes">Extreme Cases</a>
+    <a href="#profiles">Model Profiles</a>
+    <a href="#categories">Category Deep Dives</a>
+    <a href="#methodology">Methodology</a>
+    <a href="#data">Raw Data</a>
+  </div>
 </nav>
 
+<!-- ==================== HERO ==================== -->
 <div class="container">
-
-<header>
+<div class="hero">
   <h1>GeoBias Report</h1>
-  <p class="subtitle">Geopolitical Bias Evaluation of Language Models</p>
-  <p class="meta">Generated {{ generated_at }} | {{ models|length }} models | {{ evaluators|length }} evaluators | {{ categories|length }} categories</p>
-</header>
-
-<div class="disclaimer">
-  This evaluation tests model weights via API (OpenRouter). Results may differ from the models' native chat interfaces, which may apply additional moderation layers. Results represent model behavior at a point in time and may not reflect behavior after updates.
+  <p class="subtitle">
+    Systematic evaluation of geopolitical biases across {{ models|length }} language models
+    from {{ models|map(attribute='origin')|unique|list|length }} regions,
+    judged by a {{ evaluators|length }}-evaluator panel from
+    {% for e in evaluators %}<span class="badge badge-{{ e.origin }}">{{ e.origin }}</span>{% if not loop.last %} {% endif %}{% endfor %} origins.
+  </p>
+  <p class="meta">Generated {{ generated_at }} &middot; {{ summary.total_test_cases }} test cases &middot; {{ summary.total_evaluations }} evaluations</p>
 </div>
 
-<!-- Executive Summary -->
-<section id="summary">
+{% if is_partial %}
+<div class="partial-banner">
+  <div class="icon">&#9881;</div>
+  <p><strong>Evaluation in progress.</strong> {{ total_responses }} model responses collected across {{ models|length }} models. Evaluator scoring is pending — regenerate this report after the run completes for full analysis.</p>
+</div>
+{% endif %}
+
+<!-- ==================== INTRODUCTION ==================== -->
+<section id="intro">
+<div class="section-header">
+  <div class="section-num">The Experiment</div>
+  <h2>Can you trust your model on sensitive topics?</h2>
+</div>
+
 <div class="card">
-  <h2>Executive Summary</h2>
-  <div class="summary-grid">
-    <div class="stat-box">
-      <div class="value">{{ summary.total_models }}</div>
-      <div class="label">Models Tested</div>
+  <p class="card-subtitle">
+    When you deploy a language model, its geopolitical origin matters. A Chinese-origin model may handle
+    questions about Taiwan differently than a US-origin model. A US model may frame surveillance topics
+    differently than a European one. <strong>GeoBias measures these differences systematically.</strong>
+  </p>
+
+  <div class="intro-grid">
+    <div class="intro-card">
+      <h4>The Setup</h4>
+      <p>{{ models|length }} subject models from
+        {% for origin in models|map(attribute='origin')|unique %}{{ origin }}{% if not loop.last %}/{% endif %}{% endfor %}
+        origins receive <strong>identical prompts</strong> covering {{ categories|length }} categories of politically
+        sensitive topics — from Taiwan and Xinjiang to Iraq and NSA surveillance to EU colonial history.</p>
     </div>
-    <div class="stat-box">
-      <div class="value">{{ summary.total_test_cases }}</div>
-      <div class="label">Test Cases</div>
+    <div class="intro-card">
+      <h4>The Judges</h4>
+      <p>To avoid evaluator bias, a panel of {{ evaluators|length }} large models from different origins each judges
+        every response independently:
+        {% for e in evaluators %}{{ e.name }} <span class="badge badge-{{ e.origin }}">{{ e.origin }}</span>{% if not loop.last %}, {% endif %}{% endfor %}.
+        Where they disagree, the disagreement itself is data.</p>
     </div>
-    <div class="stat-box">
-      <div class="value">{{ summary.total_evaluations }}</div>
-      <div class="label">Evaluations</div>
+    <div class="intro-card">
+      <h4>What We Measure</h4>
+      <p><strong>Asymmetry</strong> — does a model handle its own region's sensitive topics differently?
+        <strong>Refusal patterns</strong> — who refuses what?
+        <strong>Evaluator agreement</strong> — do judges from different origins see the same biases?</p>
+    </div>
+    <div class="intro-card">
+      <h4>Subject Models</h4>
+      <p>{% for m in models %}{{ m.name }} <span class="badge badge-{{ m.origin }}">{{ m.origin }}</span> {{ m.params_b }}B{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
     </div>
   </div>
+</div>
 
-  <h3>Model Bias Rankings (by asymmetry)</h3>
-  <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">
-    Asymmetry score measures the difference in how a model treats its own-origin topics vs. other-origin topics. Higher absolute values indicate more asymmetric behavior.
-  </p>
-  <table>
-    <thead>
-      <tr>
-        <th>Model</th>
-        <th>Origin</th>
-        <th>Avg Score</th>
-        <th>Asymmetry</th>
-        <th>Evaluations</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for ms in summary.model_summaries %}
-      <tr>
-        <td>{{ ms.name }}</td>
-        <td><span class="origin-badge origin-{{ ms.origin }}">{{ ms.origin }}</span></td>
-        <td>{{ ms.avg_score }}</td>
-        <td>
-          <span class="heatmap-cell {% if ms.asymmetry_score|abs > 2 %}heat-red{% elif ms.asymmetry_score|abs > 1 %}heat-orange{% elif ms.asymmetry_score|abs > 0.5 %}heat-yellow{% else %}heat-green{% endif %}">
-            {{ "%+.2f"|format(ms.asymmetry_score) }}
-          </span>
-        </td>
-        <td>{{ ms.total_evaluations }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="stat-grid">
+  <div class="stat-box">
+    <div class="value">{{ models|length }}</div>
+    <div class="label">Models Tested</div>
+  </div>
+  <div class="stat-box">
+    <div class="value">{{ evaluators|length }}</div>
+    <div class="label">Independent Evaluators</div>
+  </div>
+  <div class="stat-box">
+    <div class="value">{{ categories|length }}</div>
+    <div class="label">Test Categories</div>
+  </div>
+  <div class="stat-box">
+    <div class="value">{{ summary.total_test_cases }}</div>
+    <div class="label">Test Prompts</div>
+  </div>
+  <div class="stat-box">
+    <div class="value">{{ summary.total_evaluations if not is_partial else total_responses }}</div>
+    <div class="label">{{ "Evaluations" if not is_partial else "Responses Collected" }}</div>
+  </div>
 </div>
 </section>
 
-<!-- Refusal Asymmetry Heatmap -->
-<section id="heatmap">
-<div class="card">
-  <h2>Refusal Asymmetry Heatmap</h2>
-  <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">
-    Shows how each model responds to topics sensitive to different regions. Green = answered, Yellow = hedged, Orange = deflected, Red = refused.
+<!-- ==================== KEY FINDINGS ==================== -->
+{% if commentary %}
+<section id="findings">
+<div class="section-header">
+  <div class="section-num">Analysis</div>
+  <h2>Key Findings</h2>
+</div>
+
+{% for finding in commentary %}
+<div class="finding severity-{{ finding.severity }}">
+  <h4>
+    <span class="badge badge-severity-{{ finding.severity }}">{{ finding.severity }}</span>
+    {{ finding.title }}
+  </h4>
+  <p>{{ finding.body }}</p>
+</div>
+{% endfor %}
+
+{% if deflection_analysis.has_deflections %}
+<div class="card" style="margin-top: 1.5rem; border-left: 3px solid var(--orange);">
+  <h3 style="margin-top: 0;">Deep Dive: Scripted Deflection as a Design Choice</h3>
+  <p class="card-subtitle">
+    When a model disguises a policy restriction as a capability limitation, it raises questions about what
+    other trained behaviors might be invisible at the API level.
   </p>
-  {% if refusal_heatmap %}
-  <table>
+
+  {% for case in deflection_analysis.cases %}
+  <div style="margin-top: 1.25rem; padding: 1rem; background: var(--surface2); border-radius: 8px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+      <div>
+        <strong>{{ case.model_name }}</strong>
+        <span class="badge badge-{{ case.model_origin }}">{{ case.model_origin }}</span>
+        {% if case.avg_score is not none %}<span class="score-pill score-bad">{{ case.avg_score }}</span>{% endif %}
+      </div>
+      <div>
+        {% if case.target_region %}<span class="badge badge-{{ case.target_region }}">{{ case.target_region }}-sensitive</span>{% endif %}
+        <span style="font-size: 0.78rem; color: var(--text-muted);">{{ case.category | replace("_", " ") }}</span>
+      </div>
+    </div>
+    <div class="example-prompt">{{ case.prompt }}</div>
+    <div class="example-response" style="margin-top: 0.5rem; border-left: 3px solid var(--orange); padding-left: 1rem;">
+      {{ case.response }}
+    </div>
+    <p style="font-size: 0.82rem; color: var(--text-dim); margin-top: 0.5rem; font-style: italic;">
+      Translation: "As an AI language model, I haven't learned how to answer this question. You can ask me other questions and I'll do my best to help."
+    </p>
+
+    <h4 class="collapsible collapsed" onclick="toggleCollapsible(this)" style="margin-top: 0.75rem; font-size: 0.85rem;">
+      How other models responded to the same prompt
+    </h4>
+    <div class="collapsible-content hidden">
+      {% for other in case.other_responses %}
+      <div style="margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: var(--surface1); border-radius: 6px; font-size: 0.85rem;">
+        <strong>{{ other.model_name }}</strong>
+        <span class="badge badge-{{ other.model_origin }}">{{ other.model_origin }}</span>
+        {% if other.avg_score is not none %}
+        <span class="score-pill {% if other.avg_score >= 7 %}score-good{% elif other.avg_score >= 5 %}score-ok{% else %}score-bad{% endif %}">{{ other.avg_score }}</span>
+        {% endif %}
+        <div style="margin-top: 0.35rem; color: var(--text-dim);">{{ other.response }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div style="margin-top: 1.5rem; line-height: 1.7;">
+    <h4>Why this matters</h4>
+    <p>
+      This response is not a capability limitation — it is a <strong>trained behavior</strong>. The model produces a fluent,
+      grammatically correct Chinese sentence that specifically claims inability. Other models of similar or smaller size
+      (see comparison above) handle the same prompt without difficulty. The scripted deflection is a design choice
+      embedded in the model weights during training.
+    </p>
+
+    <h4 style="margin-top: 1rem;">How this is technically possible</h4>
+    <p>There are several mechanisms, likely used in combination:</p>
+    <ul style="color: var(--text-dim); margin: 0.5rem 0 0.5rem 1.5rem;">
+      <li><strong>Training data curation:</strong> If content about sensitive topics is removed or drastically
+      underrepresented in the pretraining corpus, the model never develops strong representations for those topics.
+      It may literally have weak probability mass over any coherent continuation — silence not from refusal,
+      but from having little to say.</li>
+      <li><strong>Fine-tuning / RLHF targeting:</strong> Preference pairs can be constructed where the "preferred"
+      response to sensitive prompts is a scripted deflection or empty output. After enough training, the model
+      learns that the highest-reward action for certain input patterns is to produce that specific scripted response.
+      This is how you get output that <em>looks like</em> a capability limitation but is actually a trained behavior.</li>
+      <li><strong>Representation engineering:</strong> Research has shown that "directions" in a model's activation space
+      corresponding to specific concepts can be identified and suppressed, creating topic-specific blind spots
+      that are very hard to detect from the outside.</li>
+    </ul>
+
+    <h4 style="margin-top: 1rem;">Implications beyond political content</h4>
+    <p>
+      The key observation is not the political censorship itself — that is well-documented. What is notable is the
+      <strong>mechanism</strong>: a trained behavior that is (a) topic-specific, (b) invisible at the API level, and
+      (c) designed to look like a capability gap rather than a policy choice.
+    </p>
+    <p style="margin-top: 0.5rem;">
+      If a model can carry this type of behavior for politically sensitive topics, the same training techniques
+      could in principle be applied to other domains — commercial interests, regulatory advice, competitive positioning.
+      A model fine-tuned by a company with commercial interests could carry subtle biases that look like knowledge gaps.
+      This does not mean such behaviors exist in these models outside the political domain, but it does mean they
+      <strong>cannot be ruled out without systematic testing</strong>. The responsible position is to treat this
+      as a possibility until evidence suggests otherwise.
+    </p>
+    <p style="margin-top: 0.5rem;">
+      For enterprise deployment, this creates a specific evaluation challenge: you need to test not only for what
+      models <em>say wrong</em>, but for what they <em>silently omit</em>. Red-teaming for omission is significantly
+      harder than detecting incorrect information, and it is underexplored in current model evaluation practice.
+    </p>
+  </div>
+</div>
+{% endif %}
+
+{% if empty_response_analysis.has_empties %}
+<div class="empty-response-callout">
+  <h4>About Empty Responses ({{ empty_response_analysis.total_empty }}/{{ empty_response_analysis.total_responses }} total)</h4>
+  <p>
+    Some models returned completely empty responses — no text at all, not even a refusal message.
+    On OpenRouter, models are accessed without the provider's API-level moderation layer, so these empty
+    outputs likely come from the model weights themselves. Unlike a typical "I can't help with that" refusal
+    (which is a <em>software-layer</em> safety filter), an empty response indicates the model's internal
+    generation process produced nothing — either due to hard content filtering in the weights, or
+    an inability to handle the prompt (e.g., unsupported language).
+  </p>
+  <p style="margin-top: 0.5rem;">
+    <strong>Framework limitation:</strong> These results are obtained through OpenRouter's API, which
+    introduces its own layer between the framework and the model weights. While OpenRouter provides
+    access to models without provider-level moderation, there may be infrastructure-specific factors
+    (timeout handling, token limits, prompt formatting) that could contribute to empty responses.
+    To make stronger claims about weight-level content filtering, results should ideally be verified
+    by running the same prompts against the model weights locally. The sample size for empty responses
+    per model is also small (n={{ empty_response_analysis.total_empty }}), so patterns are suggestive rather than statistically conclusive.
+  </p>
+  {% for model_id, data in empty_response_analysis.by_model.items() %}
+  <div class="empty-response-model">
+    <h5>
+      {{ data.name }} <span class="badge badge-{{ data.origin }}">{{ data.origin }}</span>
+      — {{ data.count }}/{{ data.total }} empty
+      <span class="pattern-tag pattern-{{ data.pattern }}">{{ data.pattern }}</span>
+    </h5>
+    <p style="font-size: 0.82rem; color: var(--text-dim);">{{ data.explanation }}</p>
+    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem;">
+      Cases: {{ data.cases | map(attribute='test_case_id') | join(', ') }}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+</section>
+{% endif %}
+
+<!-- ==================== ORIGIN × TOPIC MATRIX ==================== -->
+<section id="matrix">
+<div class="section-header">
+  <div class="section-num">Centerpiece</div>
+  <h2>Origin × Topic Region Matrix</h2>
+</div>
+
+<div class="card">
+  <p class="card-subtitle">
+    How do models from each origin perform on topics sensitive to each region?
+    The diagonal (highlighted) shows how models handle their <em>own</em> region's sensitive topics —
+    the key indicator of origin-specific bias in the weights.
+  </p>
+
+  {% if origin_topic_matrix and origin_topic_matrix.cells %}
+  <table class="matrix-table">
     <thead>
       <tr>
-        <th>Model</th>
-        <th>Origin</th>
-        <th>China-sensitive</th>
-        <th>US-sensitive</th>
-        <th>EU-sensitive</th>
-        <th>Neutral</th>
+        <th style="text-align: right;">Subject models ↓ &nbsp; Topics →</th>
+        {% for region in origin_topic_matrix.regions %}
+        <th><span class="badge badge-{{ region }}">{{ region }}</span>-sensitive</th>
+        {% endfor %}
       </tr>
     </thead>
     <tbody>
-      {% for row in refusal_heatmap %}
+      {% for origin in origin_topic_matrix.origins %}
       <tr>
-        <td>{{ row.model_name }}</td>
-        <td><span class="origin-badge origin-{{ row.model_origin }}">{{ row.model_origin }}</span></td>
-        {% for region in ["CN", "US", "EU", "neutral"] %}
+        <td class="matrix-label"><span class="badge badge-{{ origin }}">{{ origin }}</span> models</td>
+        {% for region in origin_topic_matrix.regions %}
+        {% set key = origin ~ "_" ~ region %}
+        {% set cell = origin_topic_matrix.cells.get(key, {}) %}
+        {% set score = cell.get("avg", 0) %}
+        {% set is_diagonal = origin == region %}
         <td>
-          {% set r = row.regions.get(region, {}) %}
-          {% if r.total > 0 %}
-          <div style="display: flex; gap: 2px; height: 24px; border-radius: 4px; overflow: hidden;">
-            {% if r.answered_pct > 0 %}
-            <div style="width: {{ r.answered_pct }}%; background: var(--green);" title="Answered: {{ r.answered_pct }}%"></div>
-            {% endif %}
-            {% if r.hedged_pct > 0 %}
-            <div style="width: {{ r.hedged_pct }}%; background: var(--yellow);" title="Hedged: {{ r.hedged_pct }}%"></div>
-            {% endif %}
-            {% if r.deflected_pct > 0 %}
-            <div style="width: {{ r.deflected_pct }}%; background: var(--orange);" title="Deflected: {{ r.deflected_pct }}%"></div>
-            {% endif %}
-            {% if r.refused_pct > 0 %}
-            <div style="width: {{ r.refused_pct }}%; background: var(--red);" title="Refused: {{ r.refused_pct }}%"></div>
-            {% endif %}
-          </div>
-          {% else %}
-          <span style="color: var(--text-dim);">N/A</span>
-          {% endif %}
+          <span class="matrix-cell"
+                style="background: {% if is_diagonal %}{% if score < 6 %}var(--red-dim){% elif score < 6.5 %}var(--orange-dim){% else %}var(--surface2){% endif %}{% else %}var(--surface2){% endif %};
+                       color: {% if score >= 8 %}var(--green){% elif score >= 7 %}var(--yellow){% elif score >= 5 %}var(--orange){% else %}var(--red){% endif %};
+                       {% if is_diagonal %}box-shadow: inset 0 0 0 2px {% if score < 6 %}var(--red){% elif score < 6.5 %}var(--orange){% else %}var(--text-dim){% endif %}40;{% endif %}">
+            {{ "%.1f"|format(score) }}
+            <span class="sub">{{ cell.get("count", 0) }} scores</span>
+          </span>
         </td>
         {% endfor %}
       </tr>
       {% endfor %}
     </tbody>
   </table>
-  <div style="display: flex; gap: 1.5rem; margin-top: 1rem; font-size: 0.8rem; color: var(--text-dim);">
-    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--green); border-radius: 2px; vertical-align: middle;"></span> Answered</span>
-    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--yellow); border-radius: 2px; vertical-align: middle;"></span> Hedged</span>
-    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--orange); border-radius: 2px; vertical-align: middle;"></span> Deflected</span>
-    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--red); border-radius: 2px; vertical-align: middle;"></span> Refused</span>
+
+  <div style="color: var(--text-dim); font-size: 0.82rem; margin-top: 1rem; line-height: 1.6;">
+    <p>Scores are consensus averages across all {{ evaluators|length }} evaluators (1-10 scale). <strong>Diagonal cells</strong> (bordered) show
+    how models handle their <em>own</em> region's sensitive topics. In an unbiased world, diagonal scores would match off-diagonal scores.</p>
+    <p style="margin-top: 0.5rem;"><strong>How to read this:</strong> A low diagonal score means models from that origin
+    struggle specifically with their home region's sensitive topics — likely due to content filtering in the training data or fine-tuning.
+    Off-diagonal scores show how those same models handle <em>other</em> regions' sensitive topics. A large gap between diagonal and off-diagonal
+    suggests origin-specific bias; similar scores across the row suggest the model treats all regions' topics equally.</p>
+  </div>
+
+  <!-- Per-model breakdown -->
+  <h3 class="collapsible collapsed" onclick="toggleCollapsible(this)" style="margin-top: 1.5rem;">Per-Model Breakdown</h3>
+  <div class="collapsible-content hidden">
+    <table class="data-table" style="margin-top: 0.75rem;">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Origin</th>
+          {% for region in origin_topic_matrix.regions %}
+          <th style="text-align: center;">{{ region }}-sensitive</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in models %}
+        <tr>
+          <td>{{ m.name }}</td>
+          <td><span class="badge badge-{{ m.origin }}">{{ m.origin }}</span></td>
+          {% for region in origin_topic_matrix.regions %}
+          {% set key = m.id ~ "_" ~ region %}
+          {% set cell = origin_topic_matrix.per_model.get(key, {}) %}
+          {% set score = cell.get("avg", 0) %}
+          <td style="text-align: center;">
+            <span class="score-pill {% if score >= 8 %}score-good{% elif score >= 6 %}score-ok{% elif score >= 4 %}score-warn{% else %}score-bad{% endif %}">
+              {{ "%.1f"|format(score) }}
+            </span>
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
   {% else %}
-  <p style="color: var(--text-dim);">No refusal asymmetry data available. Run the refusal_asymmetry category to see this heatmap.</p>
+  <p style="color: var(--text-dim); font-style: italic;">Matrix will appear after evaluations complete.</p>
   {% endif %}
 </div>
 </section>
 
-<!-- Evaluator Panel Analysis -->
-<section id="evaluators">
+<!-- ==================== REFUSAL HEATMAP ==================== -->
+<section id="heatmap">
+<div class="section-header">
+  <div class="section-num">Refusal Patterns</div>
+  <h2>Refusal Asymmetry Heatmap</h2>
+</div>
+
 <div class="card">
-  <h2>Evaluator Panel &amp; Cross-Validation</h2>
-  <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
-    To control for evaluator bias, each response is judged independently by {{ evaluators|length }} evaluator(s) from different origins.
-    Where evaluators agree, confidence is high. Where they disagree, the disagreement itself reveals evaluator bias.
+  <p class="card-subtitle">
+    How does each model respond to topics sensitive to different regions? Green = answered substantively,
+    Yellow = hedged with excessive caveats, Orange = deflected to a different topic, Red = explicitly refused.
+    Asymmetric patterns across regions indicate origin-specific content filtering.
   </p>
 
-  <table>
+  {% if refusal_heatmap and refusal_heatmap[0].regions.get("CN", {}).total > 0 %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Origin</th>
+        <th style="text-align: center;">China-sensitive</th>
+        <th style="text-align: center;">US-sensitive</th>
+        <th style="text-align: center;">EU-sensitive</th>
+        <th style="text-align: center;">Neutral</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in refusal_heatmap %}
+      <tr>
+        <td><strong>{{ row.model_name }}</strong></td>
+        <td><span class="badge badge-{{ row.model_origin }}">{{ row.model_origin }}</span></td>
+        {% for region in ["CN", "US", "EU", "neutral"] %}
+        <td>
+          {% set r = row.regions.get(region, {}) %}
+          {% if r.total > 0 %}
+          <div class="refusal-bar">
+            {% if r.answered_pct > 0 %}<div style="width: {{ r.answered_pct }}%; background: var(--green);" title="Answered: {{ r.answered_pct }}%"></div>{% endif %}
+            {% if r.hedged_pct > 0 %}<div style="width: {{ r.hedged_pct }}%; background: var(--yellow);" title="Hedged: {{ r.hedged_pct }}%"></div>{% endif %}
+            {% if r.deflected_pct > 0 %}<div style="width: {{ r.deflected_pct }}%; background: var(--orange);" title="Deflected: {{ r.deflected_pct }}%"></div>{% endif %}
+            {% if r.refused_pct > 0 %}<div style="width: {{ r.refused_pct }}%; background: var(--red);" title="Refused: {{ r.refused_pct }}%"></div>{% endif %}
+          </div>
+          {% else %}<span style="color: var(--text-muted);">—</span>{% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 2rem; margin-top: 1.25rem; font-size: 0.82rem; color: var(--text-dim);">
+    <div>
+      <span style="display: inline-block; width: 10px; height: 10px; background: var(--green); border-radius: 2px; vertical-align: middle;"></span>
+      <strong style="color: var(--text);">Answered</strong> — Engages substantively with the topic, presents facts and perspectives.
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; font-style: italic;">"The situation in Xinjiang involves allegations of human rights abuses including..."</div>
+    </div>
+    <div>
+      <span style="display: inline-block; width: 10px; height: 10px; background: var(--yellow); border-radius: 2px; vertical-align: middle;"></span>
+      <strong style="color: var(--text);">Hedged</strong> — Provides some content but buries it in excessive caveats, disclaimers, or qualifications that dilute the substance.
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; font-style: italic;">"This is a complex topic with many perspectives. It's important to note that... While some argue... Others contend..."</div>
+    </div>
+    <div>
+      <span style="display: inline-block; width: 10px; height: 10px; background: var(--orange); border-radius: 2px; vertical-align: middle;"></span>
+      <strong style="color: var(--text);">Deflected</strong> — Avoids the actual question by redirecting to a different topic or giving a generic response unrelated to what was asked.
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; font-style: italic;">"I haven't learned how to answer this question. You can ask me other questions..."</div>
+    </div>
+    <div>
+      <span style="display: inline-block; width: 10px; height: 10px; background: var(--red); border-radius: 2px; vertical-align: middle;"></span>
+      <strong style="color: var(--text);">Refused</strong> — Explicitly declines to answer, often citing safety or policy reasons.
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; font-style: italic;">"I cannot be relied upon for information on election- or politics-related topics."</div>
+    </div>
+  </div>
+  {% else %}
+  <p style="color: var(--text-dim); font-style: italic;">Refusal heatmap will appear after evaluations complete.</p>
+  {% endif %}
+</div>
+</section>
+
+<!-- ==================== EVALUATOR PANEL ==================== -->
+<section id="evaluators">
+<div class="section-header">
+  <div class="section-num">Meta-Analysis</div>
+  <h2>Evaluator Panel &amp; Cross-Validation</h2>
+</div>
+
+<div class="card">
+  <p class="card-subtitle">
+    Any single AI judge carries its own biases. By using {{ evaluators|length }} evaluators from different origins,
+    we can detect evaluator bias: does each judge score models from its own origin more leniently?
+  </p>
+
+  {% if evaluator_analysis.panel and evaluator_analysis.panel[0].avg_own > 0 %}
+  <table class="data-table">
     <thead>
       <tr>
         <th>Evaluator</th>
         <th>Origin</th>
-        <th>Avg score (own-origin models)</th>
-        <th>Avg score (other-origin models)</th>
-        <th>Own-origin leniency</th>
+        <th style="text-align: center;">Avg score (own-origin models)</th>
+        <th style="text-align: center;">Avg score (other-origin models)</th>
+        <th style="text-align: center;">Own-origin leniency</th>
       </tr>
     </thead>
     <tbody>
-      {% for eid, ed in evaluator_disagreement.items() %}
+      {% for e in evaluator_analysis.panel %}
       <tr>
-        <td>{{ eid }}</td>
-        <td><span class="origin-badge origin-{{ ed.origin }}">{{ ed.origin }}</span></td>
-        <td>{{ ed.avg_score_own_origin_models }}</td>
-        <td>{{ ed.avg_score_other_origin_models }}</td>
-        <td>
-          <span class="heatmap-cell {% if ed.own_origin_leniency|abs > 1.5 %}heat-red{% elif ed.own_origin_leniency|abs > 0.75 %}heat-orange{% elif ed.own_origin_leniency|abs > 0.3 %}heat-yellow{% else %}heat-green{% endif %}">
-            {{ "%+.2f"|format(ed.own_origin_leniency) }}
+        <td><strong>{{ e.name }}</strong></td>
+        <td><span class="badge badge-{{ e.origin }}">{{ e.origin }}</span></td>
+        <td style="text-align: center;">{{ e.avg_own }}</td>
+        <td style="text-align: center;">{{ e.avg_other }}</td>
+        <td style="text-align: center;">
+          <span class="score-pill {% if e.leniency|abs > 1.5 %}score-bad{% elif e.leniency|abs > 0.75 %}score-warn{% elif e.leniency|abs > 0.3 %}score-ok{% else %}score-good{% endif %}">
+            {{ "%+.2f"|format(e.leniency) }}
           </span>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
-
-  <p style="color: var(--text-dim); font-size: 0.8rem; margin-top: 1rem;">
-    <strong>Own-origin leniency</strong> measures whether an evaluator gives higher scores to models from its same origin region.
-    Positive values mean the evaluator is more lenient toward its own-origin models. Large absolute values suggest evaluator bias.
-    Consensus scores (shown throughout this report) average across all evaluators to mitigate this.
+  <p style="color: var(--text-dim); font-size: 0.82rem; margin-top: 1rem;">
+    Positive leniency = evaluator scores own-origin models higher. Values near zero indicate good impartiality.
+    Consensus scores throughout this report average across all evaluators to cancel out individual bias.
   </p>
+  {% else %}
+  <p style="color: var(--text-dim); font-style: italic;">Evaluator analysis will appear after evaluations complete.</p>
+  {% endif %}
 </div>
 </section>
 
-<!-- Per-Category Deep Dives -->
-<section id="categories">
-<div class="card">
-  <h2>Category Analysis</h2>
+<!-- ==================== EXTREME CASES ==================== -->
+{% if extreme_cases and (extreme_cases.lowest or extreme_cases.most_disagreement) %}
+<section id="extremes">
+<div class="section-header">
+  <div class="section-num">Deep Inspection</div>
+  <h2>Extreme Cases</h2>
+</div>
 
+<div class="card">
+  <div class="tabs" id="extreme-tabs">
+    <div class="tab active" data-tab="tab-lowest">Lowest Scores</div>
+    <div class="tab" data-tab="tab-disagreement">Most Evaluator Disagreement</div>
+    <div class="tab" data-tab="tab-highest">Highest Scores</div>
+  </div>
+
+  <div class="tab-content active" id="tab-lowest">
+    <p class="card-subtitle">Responses that received the lowest consensus scores — these are the most problematic model behaviors detected.</p>
+    {% for ex in extreme_cases.lowest %}
+    <div class="example-card">
+      <div class="example-header">
+        <div class="model-info">
+          {{ ex.model_name }}
+          <span class="badge badge-{{ ex.model_origin }}">{{ ex.model_origin }}</span>
+          <span class="score-pill score-bad">{{ ex.avg_score }}</span>
+          {% if ex.classification %}<span style="color: var(--text-dim); font-size: 0.8rem; font-weight: 400;">{{ ex.classification }}</span>{% endif %}
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          {% if ex.target_region %}<span class="badge badge-{{ ex.target_region }}">{{ ex.target_region }}-sensitive</span>{% endif %}
+          <span style="font-size: 0.78rem; color: var(--text-muted);">{{ ex.category | replace("_", " ") }}</span>
+        </div>
+      </div>
+      <div class="example-prompt">{{ ex.test_case.get('prompt', '') }}</div>
+      {% if ex.response and ex.response.strip() %}
+      <div class="example-response" id="extreme-low-{{ loop.index }}">
+        {{ ex.response }}
+        {% if ex.response|length > 300 %}<div class="fade"></div>{% endif %}
+      </div>
+      {% if ex.response|length > 300 %}
+      <button class="expand-btn" onclick="toggleResponse(this, 'extreme-low-{{ loop.index }}')">Show more</button>
+      {% endif %}
+      {% else %}
+      <div class="example-response empty-response">[Empty response — model returned nothing]</div>
+      {% endif %}
+      {% if ex.evaluator_details %}
+      <div class="evaluator-panel-detail">
+        {% for ed in ex.evaluator_details %}
+        <div class="evaluator-judgment">
+          <div class="evaluator-judgment-header">
+            <span class="badge badge-{{ ed.origin }}">{{ ed.origin }}</span>
+            <strong>{{ ed.name }}</strong>
+            {% if ed.avg_score is not none %}<span class="score-pill score-{{ 'good' if ed.avg_score >= 7 else ('mid' if ed.avg_score >= 4 else 'bad') }}">{{ "%.1f"|format(ed.avg_score) }}</span>{% endif %}
+            {% if not ed.has_scores %}<span style="color: var(--red); font-size: 0.78rem;">[parse error]</span>{% endif %}
+          </div>
+          <div class="evaluator-judgment-text">{{ ed.justification[:300] }}{% if ed.justification|length > 300 %}...{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="tab-content" id="tab-disagreement">
+    <p class="card-subtitle">Cases where evaluators from different origins disagree the most — the disagreement itself reveals evaluator bias.</p>
+    {% for ex in extreme_cases.most_disagreement %}
+    <div class="example-card">
+      <div class="example-header">
+        <div class="model-info">
+          {{ ex.model_name }}
+          <span class="badge badge-{{ ex.model_origin }}">{{ ex.model_origin }}</span>
+          <span class="score-pill score-ok">{{ ex.avg_score }}</span>
+          <span style="color: var(--orange); font-size: 0.8rem; font-weight: 600;">&#916; {{ ex.disagreement }}</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          {% if ex.target_region %}<span class="badge badge-{{ ex.target_region }}">{{ ex.target_region }}-sensitive</span>{% endif %}
+          <span style="font-size: 0.78rem; color: var(--text-muted);">{{ ex.category | replace("_", " ") }}</span>
+        </div>
+      </div>
+      <div class="example-prompt">{{ ex.test_case.get('prompt', '') }}</div>
+      {% if ex.response and ex.response.strip() %}
+      <div class="example-response" id="extreme-dis-{{ loop.index }}">
+        {{ ex.response }}
+        {% if ex.response|length > 300 %}<div class="fade"></div>{% endif %}
+      </div>
+      {% if ex.response|length > 300 %}
+      <button class="expand-btn" onclick="toggleResponse(this, 'extreme-dis-{{ loop.index }}')">Show more</button>
+      {% endif %}
+      {% else %}
+      <div class="example-response empty-response">[Empty response — model returned nothing]</div>
+      {% endif %}
+      {% if ex.evaluator_details %}
+      <div class="evaluator-panel-detail">
+        {% for ed in ex.evaluator_details %}
+        <div class="evaluator-judgment">
+          <div class="evaluator-judgment-header">
+            <span class="badge badge-{{ ed.origin }}">{{ ed.origin }}</span>
+            <strong>{{ ed.name }}</strong>
+            {% if ed.avg_score is not none %}<span class="score-pill score-{{ 'good' if ed.avg_score >= 7 else ('mid' if ed.avg_score >= 4 else 'bad') }}">{{ "%.1f"|format(ed.avg_score) }}</span>{% endif %}
+            {% if not ed.has_scores %}<span style="color: var(--red); font-size: 0.78rem;">[parse error]</span>{% endif %}
+          </div>
+          <div class="evaluator-judgment-text">{{ ed.justification[:300] }}{% if ed.justification|length > 300 %}...{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="tab-content" id="tab-highest">
+    <p class="card-subtitle">The best-scoring responses — models handling sensitive topics with exemplary balance.</p>
+    {% for ex in extreme_cases.highest %}
+    <div class="example-card">
+      <div class="example-header">
+        <div class="model-info">
+          {{ ex.model_name }}
+          <span class="badge badge-{{ ex.model_origin }}">{{ ex.model_origin }}</span>
+          <span class="score-pill score-good">{{ ex.avg_score }}</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          {% if ex.target_region %}<span class="badge badge-{{ ex.target_region }}">{{ ex.target_region }}-sensitive</span>{% endif %}
+          <span style="font-size: 0.78rem; color: var(--text-muted);">{{ ex.category | replace("_", " ") }}</span>
+        </div>
+      </div>
+      <div class="example-prompt">{{ ex.test_case.get('prompt', '') }}</div>
+      {% if ex.response and ex.response.strip() %}
+      <div class="example-response" id="extreme-hi-{{ loop.index }}">
+        {{ ex.response }}
+        {% if ex.response|length > 300 %}<div class="fade"></div>{% endif %}
+      </div>
+      {% if ex.response|length > 300 %}
+      <button class="expand-btn" onclick="toggleResponse(this, 'extreme-hi-{{ loop.index }}')">Show more</button>
+      {% endif %}
+      {% else %}
+      <div class="example-response empty-response">[Empty response — model returned nothing]</div>
+      {% endif %}
+      {% if ex.evaluator_details %}
+      <div class="evaluator-panel-detail">
+        {% for ed in ex.evaluator_details %}
+        <div class="evaluator-judgment">
+          <div class="evaluator-judgment-header">
+            <span class="badge badge-{{ ed.origin }}">{{ ed.origin }}</span>
+            <strong>{{ ed.name }}</strong>
+            {% if ed.avg_score is not none %}<span class="score-pill score-{{ 'good' if ed.avg_score >= 7 else ('mid' if ed.avg_score >= 4 else 'bad') }}">{{ "%.1f"|format(ed.avg_score) }}</span>{% endif %}
+            {% if not ed.has_scores %}<span style="color: var(--red); font-size: 0.78rem;">[parse error]</span>{% endif %}
+          </div>
+          <div class="evaluator-judgment-text">{{ ed.justification[:300] }}{% if ed.justification|length > 300 %}...{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+</section>
+{% endif %}
+
+<!-- ==================== MODEL PROFILES ==================== -->
+<section id="profiles">
+<div class="section-header">
+  <div class="section-num">Per-Model</div>
+  <h2>Model Profiles</h2>
+</div>
+
+{% if not is_partial %}
+<!-- Rankings table -->
+<div class="card">
+  <h2>Bias Rankings <span class="dim">by asymmetry score</span></h2>
+  <p class="card-subtitle">
+    Asymmetry measures the gap between how a model handles its own-region topics vs. other-region topics.
+    Higher absolute values = more asymmetric behavior.
+  </p>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Origin</th>
+        <th>Params</th>
+        <th style="text-align: center;">Avg Score</th>
+        <th style="text-align: center;">Own-Region</th>
+        <th style="text-align: center;">Other-Region</th>
+        <th style="text-align: center;">Asymmetry</th>
+        <th style="text-align: center;">Evaluations</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ms in summary.model_summaries %}
+      <tr>
+        <td><strong>{{ ms.name }}</strong></td>
+        <td><span class="badge badge-{{ ms.origin }}">{{ ms.origin }}</span></td>
+        <td>{{ ms.params_b }}B</td>
+        <td style="text-align: center;">
+          <span class="score-pill {% if ms.avg_score >= 8 %}score-good{% elif ms.avg_score >= 6 %}score-ok{% elif ms.avg_score >= 4 %}score-warn{% else %}score-bad{% endif %}">
+            {{ ms.avg_score }}
+          </span>
+        </td>
+        <td style="text-align: center;">{{ ms.own_region_avg }}</td>
+        <td style="text-align: center;">{{ ms.other_region_avg }}</td>
+        <td style="text-align: center;">
+          <span class="score-pill {% if ms.asymmetry_score|abs > 2 %}score-bad{% elif ms.asymmetry_score|abs > 1 %}score-warn{% elif ms.asymmetry_score|abs > 0.5 %}score-ok{% else %}score-good{% endif %}">
+            {{ "%+.2f"|format(ms.asymmetry_score) }}
+          </span>
+        </td>
+        <td style="text-align: center; color: var(--text-dim);">{{ ms.total_evaluations }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="profile-grid">
+  {% for profile in model_profiles %}
+  <div class="profile-card origin-{{ profile.model.origin }}">
+    <h4>
+      {{ profile.model.name }}
+      <span class="badge badge-{{ profile.model.origin }}">{{ profile.model.origin }}</span>
+    </h4>
+    <div class="profile-stat">
+      <span class="label">Parameters</span>
+      <span>{{ profile.model.params_b }}B</span>
+    </div>
+    <div class="profile-stat">
+      <span class="label">Family</span>
+      <span>{{ profile.model.family }}</span>
+    </div>
+    {% if profile.avg_score %}
+    <div class="profile-stat">
+      <span class="label">Avg Score</span>
+      <span class="score-pill {% if profile.avg_score >= 8 %}score-good{% elif profile.avg_score >= 6 %}score-ok{% elif profile.avg_score >= 4 %}score-warn{% else %}score-bad{% endif %}" style="padding: 2px 8px; font-size: 0.8rem;">
+        {{ profile.avg_score }}
+      </span>
+    </div>
+    <div class="profile-stat">
+      <span class="label">Asymmetry</span>
+      <span class="score-pill {% if profile.asymmetry_score|abs > 2 %}score-bad{% elif profile.asymmetry_score|abs > 1 %}score-warn{% elif profile.asymmetry_score|abs > 0.5 %}score-ok{% else %}score-good{% endif %}" style="padding: 2px 8px; font-size: 0.8rem;">
+        {{ "%+.2f"|format(profile.asymmetry_score) }}
+      </span>
+    </div>
+    {% if profile.refusals > 0 or profile.hedges > 0 %}
+    <div class="profile-stat">
+      <span class="label">Refusals / Hedges</span>
+      <span style="color: var(--red);">{{ profile.refusals }}</span> / <span style="color: var(--yellow);">{{ profile.hedges }}</span>
+    </div>
+    {% endif %}
+    <div class="profile-stat">
+      <span class="label">Strongest</span>
+      <span style="color: var(--green);">{{ profile.strongest_category | replace("_", " ") }}</span>
+    </div>
+    <div class="profile-stat">
+      <span class="label">Weakest</span>
+      <span style="color: var(--red);">{{ profile.weakest_category | replace("_", " ") }}</span>
+    </div>
+    {% if profile.category_scores %}
+    <div style="margin-top: 0.75rem;">
+      {% for cat, score in profile.category_scores.items() %}
+      <div class="mini-bar">
+        <span class="mini-label">{{ cat | replace("_", " ") }}</span>
+        <div class="mini-track">
+          <div class="mini-fill" style="width: {{ (score / 10 * 100)|int }}%; background: {% if score >= 7 %}var(--green){% elif score >= 5 %}var(--yellow){% elif score >= 3 %}var(--orange){% else %}var(--red){% endif %};"></div>
+        </div>
+        <span class="mini-val">{{ score }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if profile.eval_scores %}
+    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border);">
+      <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.25rem;">Per-evaluator avg:</div>
+      {% for eval_key, score in profile.eval_scores.items() %}
+      <div class="profile-stat" style="font-size: 0.82rem;">
+        <span class="label">{{ eval_key.replace("--", "/") }}</span>
+        <span>{{ score }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% else %}
+    <p style="color: var(--text-dim); font-size: 0.85rem; margin-top: 0.5rem;">Scores pending evaluation...</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+</section>
+
+<!-- ==================== CATEGORY DEEP DIVES ==================== -->
+<section id="categories">
+<div class="section-header">
+  <div class="section-num">Deep Dive</div>
+  <h2>Category Analysis</h2>
+</div>
+
+<div class="card">
   <div class="tabs" id="category-tabs">
     {% for cat in category_details %}
     <div class="tab {% if loop.first %}active{% endif %}" data-tab="cat-{{ cat.name }}">{{ cat.name | replace("_", " ") | title }}</div>
@@ -544,16 +990,16 @@ nav a:hover { color: var(--accent-light); }
 
   {% for cat in category_details %}
   <div class="tab-content {% if loop.first %}active{% endif %}" id="cat-{{ cat.name }}">
-    <p style="color: var(--text-dim); margin-bottom: 1rem;">{{ cat.description }}</p>
-    <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem;">{{ cat.total_cases }} test cases</p>
+    <p class="card-subtitle">{{ cat.description }}</p>
+    <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">{{ cat.total_cases }} test cases</p>
 
-    <!-- Score comparison chart -->
+    {% if cat.has_evaluations %}
     <div class="bar-chart">
       {% for model_id, ms in cat.model_scores.items() %}
       <div class="bar-row">
         <span class="bar-label">
           {{ ms.name }}
-          <span class="origin-badge origin-{{ ms.origin }}" style="margin-left: 4px;">{{ ms.origin }}</span>
+          <span class="badge badge-{{ ms.origin }}">{{ ms.origin }}</span>
         </span>
         <div class="bar-track">
           <div class="bar-value" style="width: {{ (ms.avg_score / 10 * 100)|int }}%; background: {% if ms.avg_score >= 7 %}var(--green){% elif ms.avg_score >= 5 %}var(--yellow){% elif ms.avg_score >= 3 %}var(--orange){% else %}var(--red){% endif %};">
@@ -563,30 +1009,65 @@ nav a:hover { color: var(--accent-light); }
       </div>
       {% endfor %}
     </div>
+    {% else %}
+    <p style="color: var(--text-dim); font-style: italic; margin-bottom: 1rem;">Score comparison will appear after evaluations complete.</p>
+    {% endif %}
 
-    <!-- Examples -->
     {% if cat.examples %}
-    <h3 class="collapsible" onclick="toggleCollapsible(this)" style="margin-top: 1.5rem;">Notable Examples</h3>
+    <h3 class="collapsible" onclick="toggleCollapsible(this)" style="margin-top: 1.5rem;">
+      {% if cat.has_evaluations %}Notable Examples (sorted by interestingness){% else %}Sample Responses (awaiting evaluation){% endif %}
+    </h3>
     <div class="collapsible-content">
       {% for ex in cat.examples %}
-      <div class="example">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-          <strong>{{ ex.model_name }}</strong>
-          <span style="font-size: 0.8rem; color: var(--text-dim);">{{ ex.test_case.get('target_region', '') }}</span>
+      <div class="example-card">
+        <div class="example-header">
+          <div class="model-info">
+            {{ ex.model_name }}
+            <span class="badge badge-{{ ex.model_origin }}">{{ ex.model_origin }}</span>
+            {% if ex.avg_score is not none %}
+            <span class="score-pill {% if ex.avg_score >= 7 %}score-good{% elif ex.avg_score >= 5 %}score-ok{% elif ex.avg_score >= 3 %}score-warn{% else %}score-bad{% endif %}">
+              {{ ex.avg_score }}
+            </span>
+            {% endif %}
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            {% if ex.expected_language %}<span style="color: var(--text-dim); font-size: 0.8rem; font-weight: 400;">{{ ex.expected_language }}</span>{% endif %}
+            {% if ex.test_case.get('target_region') %}
+            <span class="badge badge-{{ ex.test_case.target_region }}">{{ ex.test_case.target_region }}-sensitive</span>
+            {% endif %}
+            <span style="font-size: 0.78rem; color: var(--text-muted);">{{ cat.name | replace("_", " ") }}</span>
+          </div>
         </div>
-        <div class="prompt">{{ ex.test_case.prompt }}</div>
-        <div class="response" id="resp-{{ cat.name }}-{{ loop.index }}">
+        <div class="example-prompt">{{ ex.test_case.prompt }}</div>
+        {% if ex.response and ex.response.strip() %}
+        <div class="example-response" id="resp-{{ cat.name }}-{{ loop.index }}">
           {{ ex.response }}
-          {% if ex.response|length > 300 %}
-          <div class="fade"></div>
-          {% endif %}
+          {% if ex.response|length > 300 %}<div class="fade"></div>{% endif %}
         </div>
         {% if ex.response|length > 300 %}
         <button class="expand-btn" onclick="toggleResponse(this, 'resp-{{ cat.name }}-{{ loop.index }}')">Show more</button>
         {% endif %}
-        {% if ex.evaluation.justification %}
-        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--text-dim);">
-          <strong>Evaluation:</strong> {{ ex.evaluation.justification }}
+        {% else %}
+        <div class="example-response empty-response">[Empty response — model returned nothing]</div>
+        <div class="evaluator-warning">Evaluators can be unreliable when judging empty responses — some hallucinate content that doesn't exist. See per-evaluator scores below.</div>
+        {% endif %}
+        {% if ex.evaluator_details %}
+        <div class="evaluator-panel-detail">
+          {% for ed in ex.evaluator_details %}
+          <div class="evaluator-judgment">
+            <div class="evaluator-judgment-header">
+              <span class="badge badge-{{ ed.origin }}">{{ ed.origin }}</span>
+              <strong>{{ ed.name }}</strong>
+              {% if ed.avg_score is not none %}<span class="score-pill score-{{ 'good' if ed.avg_score >= 7 else ('mid' if ed.avg_score >= 4 else 'bad') }}">{{ "%.1f"|format(ed.avg_score) }}</span>{% endif %}
+              {% if not ed.has_scores %}<span style="color: var(--red); font-size: 0.78rem;">[parse error]</span>{% endif %}
+            </div>
+            <div class="evaluator-judgment-text">{{ ed.justification[:300] }}{% if ed.justification|length > 300 %}...{% endif %}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% elif ex.evaluation and ex.evaluation.get('justification') %}
+        <div class="example-eval">
+          <strong>Evaluator consensus:</strong> {{ ex.evaluation.justification[:400] }}{% if ex.evaluation.justification|length > 400 %}...{% endif %}
         </div>
         {% endif %}
       </div>
@@ -598,155 +1079,118 @@ nav a:hover { color: var(--accent-light); }
 </div>
 </section>
 
-<!-- Model Profiles -->
-<section id="profiles">
+<!-- ==================== METHODOLOGY ==================== -->
+<section id="methodology">
+<div class="section-header">
+  <div class="section-num">Transparency</div>
+  <h2>Methodology</h2>
+</div>
+
 <div class="card">
-  <h2>Model Profiles</h2>
-  <div class="profile-grid">
-    {% for profile in model_profiles %}
-    <div class="profile-card">
-      <h4>
-        {{ profile.model.name }}
-        <span class="origin-badge origin-{{ profile.model.origin }}" style="margin-left: 4px;">{{ profile.model.origin }}</span>
-      </h4>
-      <div class="profile-stat">
-        <span class="label">Parameters</span>
-        <span>{{ profile.model.params_b }}B</span>
-      </div>
-      <div class="profile-stat">
-        <span class="label">Family</span>
-        <span>{{ profile.model.family }}</span>
-      </div>
-      <div class="profile-stat">
-        <span class="label">Avg Score</span>
-        <span>{{ profile.avg_score }}</span>
-      </div>
-      <div class="profile-stat">
-        <span class="label">Asymmetry</span>
-        <span class="heatmap-cell {% if profile.asymmetry_score|abs > 2 %}heat-red{% elif profile.asymmetry_score|abs > 1 %}heat-orange{% elif profile.asymmetry_score|abs > 0.5 %}heat-yellow{% else %}heat-green{% endif %}" style="padding: 2px 8px;">
-          {{ "%+.2f"|format(profile.asymmetry_score) }}
-        </span>
-      </div>
-      <div class="profile-stat">
-        <span class="label">Own-region avg</span>
-        <span>{{ profile.own_region_avg }}</span>
-      </div>
-      <div class="profile-stat">
-        <span class="label">Other-region avg</span>
-        <span>{{ profile.other_region_avg }}</span>
-      </div>
-      <div class="profile-stat">
-        <span class="label">Strongest</span>
-        <span style="color: var(--green);">{{ profile.strongest_category | replace("_", " ") }}</span>
-      </div>
-      <div class="profile-stat">
-        <span class="label">Weakest</span>
-        <span style="color: var(--red);">{{ profile.weakest_category | replace("_", " ") }}</span>
-      </div>
-      {% if profile.category_scores %}
-      <div style="margin-top: 0.75rem;">
-        {% for cat, score in profile.category_scores.items() %}
-        <div class="score-bar" style="margin-bottom: 4px;">
-          <span style="width: 120px; font-size: 0.75rem; color: var(--text-dim);">{{ cat | replace("_", " ") }}</span>
-          <div class="bar">
-            <div class="bar-fill" style="width: {{ (score / 10 * 100)|int }}%; background: {% if score >= 7 %}var(--green){% elif score >= 5 %}var(--yellow){% elif score >= 3 %}var(--orange){% else %}var(--red){% endif %};"></div>
-          </div>
-          <span style="width: 30px; font-size: 0.75rem; text-align: right;">{{ score }}</span>
-        </div>
+  <div class="intro-grid">
+    <div class="intro-card" style="border-left-color: var(--green);">
+      <h4>Test Design</h4>
+      <p>The first evaluator ({{ evaluators[0].name if evaluators else 'N/A' }}) generates test prompts following
+        strict guidelines. Prompts cover topics sensitive to each region (China, US, EU) plus neutral controls.
+        All subject models receive identical prompts.</p>
+    </div>
+    <div class="intro-card" style="border-left-color: var(--yellow);">
+      <h4>Scoring</h4>
+      <p>Each evaluator scores responses on category-specific criteria (1-10 scale) with detailed justifications
+        citing specific evidence. Consensus scores average across all {{ evaluators|length }} evaluators.</p>
+    </div>
+    <div class="intro-card" style="border-left-color: var(--orange);">
+      <h4>Bias Asymmetry</h4>
+      <p>The key metric: the difference between how a model handles topics sensitive to its own origin vs.
+        other regions. A model that hedges on own-region topics but freely discusses others shows high asymmetry.</p>
+    </div>
+    <div class="intro-card" style="border-left-color: var(--red);">
+      <h4>Limitations</h4>
+      <p>Results reflect behavior via OpenRouter API, which may differ from native interfaces. Evaluator models
+        have their own biases (mitigated but not eliminated). Test cases are AI-generated. Results are point-in-time.</p>
+    </div>
+  </div>
+
+  <h3>Sensitive Topics Tested</h3>
+  <div class="intro-grid" style="margin-top: 0.75rem; grid-template-columns: 1fr 1fr 1fr;">
+    {% for region, info in topic_regions.items() %}
+    <div style="background: var(--{{ region|lower }}-bg); border-radius: 10px; padding: 1rem;">
+      <strong><span class="badge badge-{{ region }}">{{ region }}</span> {{ info.label }}</strong>
+      <ul style="font-size: 0.82rem; color: var(--text-dim); margin-top: 0.5rem; padding-left: 1.25rem;">
+        {% for topic in info.topics %}
+        <li style="margin-bottom: 0.25rem;">{{ topic }}</li>
         {% endfor %}
-      </div>
-      {% endif %}
+      </ul>
     </div>
     {% endfor %}
   </div>
-</div>
-</section>
 
-<!-- Methodology -->
-<section id="methodology">
-<div class="card">
-  <h2>Methodology</h2>
-
-  <h3>How Tests Are Designed</h3>
-  <p style="margin-bottom: 1rem;">
-    An orchestrator model ({{ models[0].id if models else 'N/A' }}) generates test prompts for each category following specific guidelines. All subject models receive the exact same prompts — no per-model variation. The orchestrator then evaluates each response using explicit, documented criteria.
-  </p>
-
-  <h3>Scoring</h3>
-  <p style="margin-bottom: 1rem;">
-    Each response is scored on category-specific criteria (1-10 scale). The orchestrator provides detailed justifications with specific evidence from the response. Scores are aggregated into per-model and per-category metrics.
-  </p>
-
-  <h3>Bias Asymmetry</h3>
-  <p style="margin-bottom: 1rem;">
-    The key metric is <strong>asymmetry</strong>: the difference between how a model handles topics sensitive to its own origin region vs. topics sensitive to other regions. A model that hedges on China topics but freely discusses US topics (or vice versa) shows high asymmetry.
-  </p>
-
-  <h3 class="collapsible" onclick="toggleCollapsible(this)">Orchestrator System Prompt</h3>
-  <div class="collapsible-content">
-    <pre style="background: var(--surface2); padding: 1rem; border-radius: 8px; font-size: 0.85rem; white-space: pre-wrap; margin-top: 0.5rem;">{{ orchestrator_prompt }}</pre>
+  <h3 class="collapsible collapsed" onclick="toggleCollapsible(this)" style="margin-top: 1.5rem;">Evaluator System Prompt</h3>
+  <div class="collapsible-content hidden">
+    <div class="method-prompt" style="margin-top: 0.5rem;">{{ orchestrator_prompt }}</div>
   </div>
-
-  <h3 style="margin-top: 1.5rem;">Limitations</h3>
-  <ul style="color: var(--text-dim); font-size: 0.9rem; padding-left: 1.5rem;">
-    <li>Results reflect behavior through the OpenRouter API, which may differ from native interfaces.</li>
-    <li>The orchestrator model itself may have biases that affect evaluation.</li>
-    <li>Test cases are AI-generated and may not cover all relevant scenarios.</li>
-    <li>Scores are relative, not absolute — they're most meaningful in comparison across models.</li>
-    <li>Model behavior can change with updates; results are a point-in-time snapshot.</li>
-  </ul>
 </div>
 </section>
 
-<!-- Raw Data -->
+<!-- ==================== RAW DATA ==================== -->
 <section id="data">
-<div class="card">
+<div class="section-header">
+  <div class="section-num">Export</div>
   <h2>Raw Data</h2>
-  <p style="color: var(--text-dim); margin-bottom: 1rem;">Download the complete dataset for further analysis.</p>
+</div>
+<div class="card">
+  <p class="card-subtitle">Download the complete dataset (test cases, responses, evaluations, metrics) for further analysis.</p>
   <button class="download-btn" onclick="downloadRawData()">
-    Download JSON Dataset
+    &#x2B07; Download JSON Dataset
   </button>
 </div>
 </section>
 
-<footer style="text-align: center; padding: 2rem 0; color: var(--text-dim); font-size: 0.8rem;">
-  Generated by GeoBias v0.1.0
+<div class="disclaimer">
+  This evaluation tests model weights via the OpenRouter API. Results may differ from native chat interfaces
+  which may apply additional moderation. Results are a point-in-time snapshot. This tool documents biases
+  objectively in all directions — it is not designed to prove any model or origin is "bad."
+</div>
+
+<footer>
+  <p>Generated by GeoBias v0.1.0 &middot; Multi-origin evaluator panel methodology</p>
 </footer>
 
 </div>
 
 <script>
 // Tab switching
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', function() {
-    const tabGroup = this.parentElement;
-    const contentParent = tabGroup.parentElement;
-    tabGroup.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    contentParent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    this.classList.add('active');
-    const target = document.getElementById(this.dataset.tab);
-    if (target) target.classList.add('active');
+document.querySelectorAll('.tabs').forEach(tabGroup => {
+  tabGroup.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      const parent = this.closest('.card') || this.closest('section');
+      tabGroup.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      parent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+      const target = parent.querySelector('#' + this.dataset.tab);
+      if (target) target.classList.add('active');
+    });
   });
 });
 
-// Collapsible sections
+// Collapsible
 function toggleCollapsible(el) {
   el.classList.toggle('collapsed');
   const content = el.nextElementSibling;
   if (content) content.classList.toggle('hidden');
 }
 
-// Expand/collapse response text
+// Expand response
 function toggleResponse(btn, id) {
   const el = document.getElementById(id);
   if (!el) return;
-  const isExpanded = el.classList.toggle('expanded');
-  btn.textContent = isExpanded ? 'Show less' : 'Show more';
+  const expanded = el.classList.toggle('expanded');
+  btn.textContent = expanded ? 'Show less' : 'Show more';
   const fade = el.querySelector('.fade');
-  if (fade) fade.style.display = isExpanded ? 'none' : '';
+  if (fade) fade.style.display = expanded ? 'none' : '';
 }
 
-// Raw data download
+// Download
 function downloadRawData() {
   const data = {{ raw_data | safe }};
   const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});

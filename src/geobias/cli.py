@@ -50,9 +50,10 @@ def cli():
 @click.option("--cases-per-category", type=int, default=None, help="Number of test cases per category")
 @click.option("--evaluator", "evaluator_ids", type=str, multiple=True, help="Evaluator model ID(s). Default: multi-origin panel (CN+US+EU)")
 @click.option("--output", type=click.Path(), default=None, help="Output directory (default: ../geobias-results or ./reports)")
+@click.option("--resume", "resume_dir", type=click.Path(exists=True), default=None, help="Resume from an existing run directory")
 @click.option("--dry-run", is_flag=True, help="Show plan and cost estimate without making API calls")
 @click.option("-v", "--verbose", is_flag=True, help="Verbose output")
-def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, output, dry_run, verbose):
+def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, output, resume_dir, dry_run, verbose):
     """Run a geopolitical bias evaluation."""
     setup_logging(verbose)
 
@@ -104,6 +105,7 @@ def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, ou
         output_dir=output_dir,
         group_name=group,
         dry_run=dry_run,
+        resume_dir=Path(resume_dir) if resume_dir else None,
     )
 
     # Show plan

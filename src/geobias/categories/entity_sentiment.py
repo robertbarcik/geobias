@@ -74,7 +74,7 @@ Respond with a JSON array:
                 lines = lines[:-1]
             text = "\n".join(lines)
 
-        cases_data = json.loads(text)
+        cases_data = json.loads(text, strict=False)
         return [
             TestCase(
                 id=item.get("id", f"es-{uuid.uuid4().hex[:8]}"),
@@ -140,7 +140,7 @@ Respond with valid JSON:
                 lines = lines[:-1]
             text = "\n".join(lines)
 
-        data = json.loads(text)
+        data = json.loads(text, strict=False)
         scores = data.get("scores", {})
         scores["sentiment_score"] = data.get("sentiment_score", 0)
         return Evaluation(

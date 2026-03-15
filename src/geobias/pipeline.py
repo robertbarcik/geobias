@@ -170,6 +170,9 @@ class EvaluationPipeline:
         self, category, case: TestCase, model: ModelSpec, response_text: str, evaluator: ModelSpec
     ) -> Evaluation:
         """Use a specific evaluator to evaluate a model's response."""
+        # If the response is empty, tell the evaluator explicitly so it doesn't hallucinate
+        if not response_text.strip():
+            response_text = "[EMPTY RESPONSE — the model returned no text. Score all criteria as 0.]"
         messages = category.evaluation_prompt(case, response_text)
         try:
             resp = await self.client.complete(

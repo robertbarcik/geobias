@@ -110,6 +110,16 @@ class LLMClient:
         self._save_cache(cache_key, result)
         return result
 
+    @staticmethod
+    def _strip_fences(text: str) -> str:
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines)
+        return text
+
     async def complete_json(
         self,
         model: str,
@@ -117,19 +127,40 @@ class LLMClient:
         temperature: float = 0.0,
         max_tokens: int = 4096,
     ) -> dict:
-        """Complete and parse the response as JSON."""
+        """Complete and parse the response as JSON.
+
+        One malformed generation should not kill a whole run: on a parse
+        failure we retry once, telling the model exactly what was wrong and
+        asking for corrected JSON only. A second failure raises with enough
+        context to diagnose (model + the start of the offending text).
+        """
         resp = await self.complete(model, messages, temperature, max_tokens)
-        # Try to extract JSON from the response
-        text = resp.content.strip()
-        # Handle markdown code blocks
-        if text.startswith("```"):
-            lines = text.split("\n")
-            # Remove first and last lines (``` markers)
-            lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            text = "\n".join(lines)
-        return json.loads(text, strict=False)
+        text = self._strip_fences(resp.content)
+        try:
+            return json.loads(text, strict=False)
+        except json.JSONDecodeError as first_err:
+            retry_messages = messages + [
+                {"role": "assistant", "content": resp.content},
+                {
+                    "role": "user",
+                    "content": (
+                        "Your previous reply was not valid JSON "
+                        f"(parser error: {first_err}). Send the corrected, "
+                        "complete JSON only, with no commentary and no "
+                        "markdown fences."
+                    ),
+                },
+            ]
+            resp2 = await self.complete(model, retry_messages, temperature, max_tokens)
+            text2 = self._strip_fences(resp2.content)
+            try:
+                return json.loads(text2, strict=False)
+            except json.JSONDecodeError as second_err:
+                raise RuntimeError(
+                    f"Model {model} returned invalid JSON twice "
+                    f"(last error: {second_err}). Response started with: "
+                    f"{text2[:200]!r}"
+                ) from second_err
 
 
 def estimate_cost(

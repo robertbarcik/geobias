@@ -142,7 +142,10 @@ Respond with valid JSON:
 
         data = json.loads(text, strict=False)
         scores = data.get("scores", {})
-        scores["sentiment_score"] = data.get("sentiment_score", 0)
+        # sentiment_score is on a -5..+5 scale: it must NOT live in the 1-10
+        # scores dict, or every averaging consumer would pool mixed scales.
+        in_scores = scores.pop("sentiment_score", None)
+        sentiment_score = data.get("sentiment_score", in_scores if in_scores is not None else 0)
         return Evaluation(
             test_case_id=test_case_id,
             model_id=model_id,
@@ -150,4 +153,5 @@ Respond with valid JSON:
             classification=data.get("overall_sentiment", "neutral"),
             justification=data.get("justification", ""),
             highlights=data.get("highlights", []),
+            scores_extra={"sentiment_score": sentiment_score},
         )

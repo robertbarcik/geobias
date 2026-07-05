@@ -321,6 +321,14 @@ footer { text-align: center; padding: 3rem 0; color: var(--text-muted); font-siz
   <h2>Key Findings</h2>
 </div>
 
+<div style="background: var(--surface2); border-left: 3px solid var(--text-dim); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.82rem; color: var(--text-dim); line-height: 1.6;">
+  <strong>Read with care:</strong> these findings rest on small samples ({{ summary.total_test_cases }} test cases
+  across {{ categories|length }} categories; per-claim sample sizes are shown as n=...).
+  Scores are <em>relative</em> comparisons on the evaluator rubric, not absolute quality measures,
+  and test cases are AI-generated, so coverage of each topic is partial. Findings below the
+  minimum sample threshold are capped at "medium" severity and marked directional.
+</div>
+
 {% for finding in commentary %}
 <div class="finding severity-{{ finding.severity }}">
   <h4>
@@ -504,7 +512,7 @@ footer { text-align: center; padding: 3rem 0; color: var(--text-muted); font-siz
                        color: {% if score >= 8 %}var(--green){% elif score >= 7 %}var(--yellow){% elif score >= 5 %}var(--orange){% else %}var(--red){% endif %};
                        {% if is_diagonal %}box-shadow: inset 0 0 0 2px {% if score < 6 %}var(--red){% elif score < 6.5 %}var(--orange){% else %}var(--text-dim){% endif %}40;{% endif %}">
             {{ "%.1f"|format(score) }}
-            <span class="sub">{{ cell.get("count", 0) }} scores</span>
+            <span class="sub">n={{ cell.get("n_evals", 0) }} · {{ cell.get("count", 0) }} scores</span>
           </span>
         </td>
         {% endfor %}
@@ -520,6 +528,10 @@ footer { text-align: center; padding: 3rem 0; color: var(--text-muted); font-siz
     struggle specifically with their home region's sensitive topics — likely due to content filtering in the training data or fine-tuning.
     Off-diagonal scores show how those same models handle <em>other</em> regions' sensitive topics. A large gap between diagonal and off-diagonal
     suggests origin-specific bias; similar scores across the row suggest the model treats all regions' topics equally.</p>
+    <p style="margin-top: 0.5rem;"><strong>Limitations:</strong> each cell rests on a small sample (n = evaluated
+    model-response pairs, shown in the cell). Scores are relative comparisons on the evaluator rubric, not absolute
+    quality measures, and the test cases are AI-generated, so per-cell differences of a point or less should be
+    treated as noise rather than signal.</p>
   </div>
 
   <!-- Per-model breakdown -->
@@ -669,9 +681,13 @@ footer { text-align: center; padding: 3rem 0; color: var(--text-muted); font-siz
         <td style="text-align: center;">{{ e.avg_own }}</td>
         <td style="text-align: center;">{{ e.avg_other }}</td>
         <td style="text-align: center;">
+          {% if e.skipped %}
+          <span class="score-pill" title="Own-origin leniency cannot be computed for an evaluator with unknown origin.">n/a (unknown origin)</span>
+          {% else %}
           <span class="score-pill {% if e.leniency|abs > 1.5 %}score-bad{% elif e.leniency|abs > 0.75 %}score-warn{% elif e.leniency|abs > 0.3 %}score-ok{% else %}score-good{% endif %}">
             {{ "%+.2f"|format(e.leniency) }}
           </span>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}

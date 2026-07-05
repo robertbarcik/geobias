@@ -134,24 +134,41 @@ class LLMClient:
 
 def estimate_cost(
     num_models: int,
-    num_categories: int,
+    categories: list[str],
     cases_per_category: int,
     num_evaluators: int = 3,
 ) -> dict:
-    """Rough cost estimate for an evaluation run."""
-    generation_calls = num_categories  # one batch generation per category
-    response_calls = num_models * num_categories * cases_per_category
+    """Rough cost estimate for an evaluation run.
+
+    Uses the real expanded case count per category (language_quality expands
+    each generated case into one TestCase per language, a 5x multiplier).
+    """
+    from .categories.registry import get_categories
+
+    cats = get_categories(list(categories))
+    total_cases = sum(cat.expected_case_count(cases_per_category) for cat in cats)
+
+    generation_calls = len(cats)  # one batch generation per category
+    response_calls = num_models * total_cases
     evaluation_calls = response_calls * num_evaluators  # each evaluator judges every response
 
-    # Rough token estimates
-    avg_prompt_tokens = 800
-    avg_completion_tokens = 500
+    # Token estimates measured from real 7b runs: subject prompts are short
+    # (~50 tokens) but responses average ~1100 completion tokens. Evaluation
+    # prompts embed the full subject response plus the scoring rubric.
+    subject_prompt_tokens = 100
+    subject_completion_tokens = 1100
+    eval_prompt_tokens = 500 + subject_completion_tokens
+    eval_completion_tokens = 500
 
-    # Pricing: small subject models ~$0.10/M, evaluator panel avg ~$0.30/M input, $0.50/M output
-    # (Qwen 235B: $0.07/$0.10, Llama 70B: $0.10/$0.32, Mistral Large: $0.50/$1.50 → avg ~$0.22/$0.64)
-    small_model_cost = response_calls * (avg_prompt_tokens * 0.10 + avg_completion_tokens * 0.10) / 1_000_000
-    evaluator_cost = (generation_calls + evaluation_calls) * (
-        avg_prompt_tokens * 0.22 + avg_completion_tokens * 0.64
+    # Pricing: small subject models ~$0.10/M in and out; evaluator panel avg
+    # (Qwen 235B: $0.07/$0.10, Llama 70B: $0.10/$0.32, Mistral Large: $0.50/$1.50)
+    # is roughly $0.22/M input, $0.64/M output.
+    small_model_cost = response_calls * (
+        subject_prompt_tokens * 0.10 + subject_completion_tokens * 0.10
+    ) / 1_000_000
+    evaluator_cost = (
+        generation_calls * (500 * 0.22 + 2000 * 0.64)  # batch generations are long JSON outputs
+        + evaluation_calls * (eval_prompt_tokens * 0.22 + eval_completion_tokens * 0.64)
     ) / 1_000_000
 
     return {

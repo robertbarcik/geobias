@@ -7,6 +7,21 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional
 
 
+# Score keys that are NOT on the shared 1-10 rubric scale and must never be
+# pooled into rubric averages. sentiment_score is a -5..+5 signal. Older runs
+# (before it moved to Evaluation.scores_extra) stored it inside "scores", so
+# every averaging consumer excludes it by name for backward compatibility.
+EXCLUDED_SCORE_KEYS = {"sentiment_score"}
+
+
+def numeric_scores(scores: dict) -> list:
+    """Return only the numeric 1-10 rubric scores, excluding off-scale keys."""
+    return [
+        v for k, v in (scores or {}).items()
+        if k not in EXCLUDED_SCORE_KEYS and isinstance(v, (int, float))
+    ]
+
+
 @dataclass
 class TestCase:
     """A single test prompt with metadata."""
@@ -41,11 +56,14 @@ class Evaluation:
 
     test_case_id: str
     model_id: str
-    scores: dict  # category-specific scores
+    scores: dict  # category-specific 1-10 rubric scores
     classification: Optional[str] = None  # e.g. "answered", "hedged", "deflected", "refused"
     justification: str = ""
     highlights: list[dict] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)  # evaluator info, agreement stats
+    # Off-scale numeric signals (e.g. sentiment_score, -5..+5) that must not be
+    # pooled with the 1-10 rubric scores by averaging consumers.
+    scores_extra: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -56,6 +74,15 @@ class TestCategory(abc.ABC):
 
     name: str
     description: str
+
+    def expected_case_count(self, cases_per_category: int) -> int:
+        """How many TestCases a generation batch actually yields.
+
+        Most categories yield exactly cases_per_category; categories that expand
+        each generated case (e.g. language_quality creates one TestCase per
+        language) override this so cost estimates stay honest.
+        """
+        return cases_per_category
 
     @abc.abstractmethod
     def generation_prompt(self, cases_per_category: int) -> list[dict]:

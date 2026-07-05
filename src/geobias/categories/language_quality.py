@@ -29,6 +29,10 @@ class LanguageQuality(TestCategory):
     name = "language_quality"
     description = "Tests language quality across multiple languages to detect training data bias and origin-language advantages."
 
+    def expected_case_count(self, cases_per_category: int) -> int:
+        # Each generated case expands into one TestCase per language.
+        return cases_per_category * len(LANGUAGES)
+
     def generation_prompt(self, cases_per_category: int) -> list[dict]:
         return [
             {"role": "system", "content": ORCHESTRATOR_SYSTEM_PROMPT},

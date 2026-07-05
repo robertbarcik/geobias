@@ -7,12 +7,23 @@ import json
 import logging
 from pathlib import Path
 
-from .categories.base import TestCase, ModelResponse, Evaluation
+from .categories.base import (
+    EXCLUDED_SCORE_KEYS,
+    Evaluation,
+    ModelResponse,
+    TestCase,
+    numeric_scores,
+)
 from .categories.registry import get_categories
 from .config import EvalConfig, ModelSpec
 from .llm import LLMClient
 
 logger = logging.getLogger(__name__)
+
+# Regions used for the own-region vs other-region asymmetry split. Cases whose
+# target_region is neutral/other/None are excluded from both sides (matching
+# the report's origin x topic matrix logic).
+CORE_REGIONS = ("CN", "US", "EU")
 
 
 class EvaluationPipeline:
@@ -216,9 +227,23 @@ class EvaluationPipeline:
 
             merged_scores = {}
             for key in all_score_keys:
+                if key in EXCLUDED_SCORE_KEYS:
+                    continue  # off-scale signals are merged into scores_extra below
                 values = [ev.scores[key] for ev in evals if key in ev.scores and isinstance(ev.scores[key], (int, float))]
                 if values:
                     merged_scores[key] = round(sum(values) / len(values), 2)
+
+            # Merge off-scale signals (e.g. sentiment_score) separately
+            extra_values: dict[str, list] = {}
+            for ev in evals:
+                for k, v in (getattr(ev, "scores_extra", {}) or {}).items():
+                    if isinstance(v, (int, float)):
+                        extra_values.setdefault(k, []).append(v)
+                for k in EXCLUDED_SCORE_KEYS:
+                    v = ev.scores.get(k)
+                    if isinstance(v, (int, float)):
+                        extra_values.setdefault(k, []).append(v)
+            merged_extra = {k: round(sum(vals) / len(vals), 2) for k, vals in extra_values.items()}
 
             # Majority vote for classification
             classifications = [ev.classification for ev in evals if ev.classification]
@@ -251,7 +276,7 @@ class EvaluationPipeline:
             score_lists = {}
             for ev in evals:
                 for k, v in ev.scores.items():
-                    if isinstance(v, (int, float)):
+                    if k not in EXCLUDED_SCORE_KEYS and isinstance(v, (int, float)):
                         score_lists.setdefault(k, []).append(v)
             agreement = {}
             for k, vals in score_lists.items():
@@ -267,6 +292,7 @@ class EvaluationPipeline:
                 classification=majority_cls,
                 justification=merged_justification,
                 highlights=all_highlights,
+                scores_extra=merged_extra,
                 metadata={
                     "per_evaluator": per_evaluator,
                     "evaluator_agreement_stddev": agreement,
@@ -300,14 +326,13 @@ class EvaluationPipeline:
 
             all_scores = []
             for ev in model_evals:
-                all_scores.extend(ev.scores.values())
-            numeric_scores = [s for s in all_scores if isinstance(s, (int, float))]
+                all_scores.extend(numeric_scores(ev.scores))
 
             metrics["per_model"][model.id] = {
                 "name": model.name,
                 "origin": model.origin,
                 "total_evaluations": len(model_evals),
-                "avg_score": round(sum(numeric_scores) / len(numeric_scores), 2) if numeric_scores else 0,
+                "avg_score": round(sum(all_scores) / len(all_scores), 2) if all_scores else 0,
                 "classifications": {},
             }
 
@@ -328,7 +353,7 @@ class EvaluationPipeline:
                     continue
                 scores = []
                 for ev in model_cat_evals:
-                    scores.extend(v for v in ev.scores.values() if isinstance(v, (int, float)))
+                    scores.extend(numeric_scores(ev.scores))
                 per_model[model.id] = {
                     "avg_score": round(sum(scores) / len(scores), 2) if scores else 0,
                     "num_evaluations": len(model_cat_evals),
@@ -356,9 +381,11 @@ class EvaluationPipeline:
                     model_matrix[region] = classification_counts
                 metrics["refusal_matrix"][model.id] = model_matrix
 
-        # Bias asymmetry
+        # Bias asymmetry (own-region vs other-region topics). Only cases whose
+        # target_region is one of CORE_REGIONS enter the split; neutral/other
+        # region cases are excluded from both sides (matching the report matrix).
         for model in self.config.models:
-            if model.origin == "unknown":
+            if model.origin not in CORE_REGIONS:
                 continue
             own_region_evals = []
             other_region_evals = []
@@ -366,7 +393,7 @@ class EvaluationPipeline:
                 if ev.model_id != model.id:
                     continue
                 tc = tc_lookup.get(ev.test_case_id)
-                if not tc or not tc.target_region:
+                if not tc or tc.target_region not in CORE_REGIONS:
                     continue
                 if tc.target_region == model.origin:
                     own_region_evals.append(ev)
@@ -376,7 +403,7 @@ class EvaluationPipeline:
             def avg_scores(evals):
                 all_s = []
                 for ev in evals:
-                    all_s.extend(v for v in ev.scores.values() if isinstance(v, (int, float)))
+                    all_s.extend(numeric_scores(ev.scores))
                 return round(sum(all_s) / len(all_s), 2) if all_s else 0
 
             metrics["bias_asymmetry"][model.id] = {
@@ -395,6 +422,18 @@ class EvaluationPipeline:
                     evaluator_origin = e.origin
                     break
 
+            if evaluator_origin == "unknown":
+                logger.warning(
+                    f"Evaluator {evaluator_id} has unknown origin; skipping the "
+                    f"own-origin leniency metric for it (cannot define own vs other origin)."
+                )
+                metrics["evaluator_disagreement"][evaluator_id] = {
+                    "origin": "unknown",
+                    "skipped": True,
+                    "note": "Own-origin leniency not computable for an evaluator with unknown origin.",
+                }
+                continue
+
             # Does this evaluator score models from its own origin higher?
             own_origin_scores = []
             other_origin_scores = []
@@ -402,7 +441,7 @@ class EvaluationPipeline:
                 subject_model = next((m for m in self.config.models if m.id == ev.model_id), None)
                 if not subject_model:
                     continue
-                numeric = [v for v in ev.scores.values() if isinstance(v, (int, float))]
+                numeric = numeric_scores(ev.scores)
                 if subject_model.origin == evaluator_origin:
                     own_origin_scores.extend(numeric)
                 else:

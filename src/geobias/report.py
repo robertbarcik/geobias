@@ -10,9 +10,18 @@ from statistics import mean, stdev
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from .categories.base import TestCase, Evaluation
+from .categories.base import Evaluation, TestCase, numeric_scores
 from .categories.prompts import ORCHESTRATOR_SYSTEM_PROMPT, TOPIC_REGIONS
 from .config import ModelSpec
+
+# Regions used for the own-region vs other-region asymmetry split (must match
+# the pipeline's CORE_REGIONS and the origin x topic matrix axes).
+CORE_REGIONS = ("CN", "US", "EU")
+
+# Minimum sample size (evaluated cases per side) before a finding may be
+# labeled "high" severity. Below this, findings are capped at "medium" and
+# flagged as directional.
+MIN_N_FOR_HIGH_SEVERITY = 6
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +121,13 @@ def generate_report(run_dir: Path) -> Path:
     total_responses = sum(len(resp_list) for resp_list in responses.values())
     is_partial = len(evaluations) == 0 and total_responses > 0
 
+    # Recompute score-derived metrics from the raw evaluations. metrics.json
+    # from older runs pooled the off-scale sentiment_score into rubric averages
+    # and bucketed neutral/other-region cases into the asymmetry split, so
+    # stored values may be stale. The stored metrics.json is left untouched.
+    metrics = _recompute_score_metrics(models, evaluators, evaluations, per_evaluator, tc_lookup, metrics)
+    data["metrics"] = metrics  # keep the raw-data download consistent with the report
+
     # --- Compute all report sections ---
     summary = _compute_executive_summary(models, metrics, evaluations, test_cases, total_responses)
     origin_topic_matrix = _build_origin_topic_matrix(models, evaluations, tc_lookup)
@@ -164,6 +180,140 @@ def generate_report(run_dir: Path) -> Path:
     return report_path
 
 
+def _recompute_score_metrics(models, evaluators, evaluations, per_evaluator, tc_lookup, metrics) -> dict:
+    """Recompute score-derived metrics from raw evaluation data.
+
+    Returns a deep copy of the metrics dict with per_model averages,
+    per_category averages, bias_asymmetry, and evaluator_disagreement
+    recomputed using the current aggregation rules (off-scale score keys
+    excluded by name, asymmetry restricted to CN/US/EU target regions).
+    Classification-based metrics (refusal_matrix) are kept as stored.
+    Old vs new differences are logged so stale metrics.json values are visible.
+    """
+    metrics = json.loads(json.dumps(metrics or {}))
+    if not evaluations:
+        return metrics
+
+    old_asymmetry = {k: v.get("asymmetry") for k, v in metrics.get("bias_asymmetry", {}).items()}
+    old_leniency = {k: v.get("own_origin_leniency") for k, v in metrics.get("evaluator_disagreement", {}).items()}
+
+    # Per-model average scores
+    per_model = metrics.setdefault("per_model", {})
+    for model in models:
+        model_evals = [e for e in evaluations if e["model_id"] == model.id]
+        if not model_evals:
+            continue
+        scores = []
+        for ev in model_evals:
+            scores.extend(numeric_scores(ev.get("scores", {})))
+        entry = per_model.setdefault(model.id, {"name": model.name, "origin": model.origin, "classifications": {}})
+        entry["total_evaluations"] = len(model_evals)
+        entry["avg_score"] = round(mean(scores), 2) if scores else 0
+
+    # Per-category average scores
+    cat_case_ids = {}
+    for tc_id, tc in tc_lookup.items():
+        cat_case_ids.setdefault(tc.get("category"), set()).add(tc_id)
+    per_category = metrics.setdefault("per_category", {})
+    for cat_name, case_ids in cat_case_ids.items():
+        pm = {}
+        for model in models:
+            model_cat_evals = [e for e in evaluations if e["model_id"] == model.id and e["test_case_id"] in case_ids]
+            if not model_cat_evals:
+                continue
+            scores = []
+            for ev in model_cat_evals:
+                scores.extend(numeric_scores(ev.get("scores", {})))
+            pm[model.id] = {
+                "avg_score": round(mean(scores), 2) if scores else 0,
+                "num_evaluations": len(model_cat_evals),
+            }
+        per_category[cat_name] = pm
+
+    # Bias asymmetry: only CN/US/EU target regions enter the own/other split
+    bias_asymmetry = {}
+    for model in models:
+        if model.origin not in CORE_REGIONS:
+            continue
+        own_evals, other_evals = [], []
+        for ev in evaluations:
+            if ev["model_id"] != model.id:
+                continue
+            tc = tc_lookup.get(ev["test_case_id"])
+            if not tc or tc.get("target_region") not in CORE_REGIONS:
+                continue
+            if tc["target_region"] == model.origin:
+                own_evals.append(ev)
+            else:
+                other_evals.append(ev)
+
+        def _avg(evals):
+            all_s = []
+            for ev in evals:
+                all_s.extend(numeric_scores(ev.get("scores", {})))
+            return round(mean(all_s), 2) if all_s else 0
+
+        bias_asymmetry[model.id] = {
+            "own_region_avg": _avg(own_evals),
+            "other_region_avg": _avg(other_evals),
+            "own_region_count": len(own_evals),
+            "other_region_count": len(other_evals),
+            "asymmetry": round(_avg(other_evals) - _avg(own_evals), 2),
+        }
+    metrics["bias_asymmetry"] = bias_asymmetry
+
+    # Evaluator own-origin leniency (skipped for unknown-origin evaluators)
+    evaluator_disagreement = {}
+    model_by_id = {m.id: m for m in models}
+    for evaluator in evaluators:
+        evals = per_evaluator.get(evaluator.safe_filename(), [])
+        if not evals:
+            continue
+        if evaluator.origin == "unknown":
+            logger.warning(
+                f"Evaluator {evaluator.id} has unknown origin; skipping the own-origin leniency metric for it."
+            )
+            evaluator_disagreement[evaluator.id] = {
+                "origin": "unknown",
+                "skipped": True,
+                "note": "Own-origin leniency not computable for an evaluator with unknown origin.",
+            }
+            continue
+        own_scores, other_scores = [], []
+        for ev in evals:
+            subject = model_by_id.get(ev["model_id"])
+            if not subject:
+                continue
+            numeric = numeric_scores(ev.get("scores", {}))
+            if subject.origin == evaluator.origin:
+                own_scores.extend(numeric)
+            else:
+                other_scores.extend(numeric)
+        own_avg = round(mean(own_scores), 2) if own_scores else 0
+        other_avg = round(mean(other_scores), 2) if other_scores else 0
+        evaluator_disagreement[evaluator.id] = {
+            "origin": evaluator.origin,
+            "avg_score_own_origin_models": own_avg,
+            "avg_score_other_origin_models": other_avg,
+            "own_origin_leniency": round(own_avg - other_avg, 2),
+        }
+    if evaluator_disagreement:
+        metrics["evaluator_disagreement"] = evaluator_disagreement
+
+    # Log deltas vs the stored metrics.json
+    for mid, entry in bias_asymmetry.items():
+        old = old_asymmetry.get(mid)
+        if old is not None and old != entry["asymmetry"]:
+            logger.info(f"Recomputed bias_asymmetry for {mid}: {old:+.2f} -> {entry['asymmetry']:+.2f}")
+    for eid, entry in evaluator_disagreement.items():
+        old = old_leniency.get(eid)
+        new = entry.get("own_origin_leniency")
+        if old is not None and new is not None and old != new:
+            logger.info(f"Recomputed own_origin_leniency for {eid}: {old:+.2f} -> {new:+.2f}")
+
+    return metrics
+
+
 def _compute_executive_summary(models, metrics, evaluations, test_cases, total_responses) -> dict:
     per_model = metrics.get("per_model", {})
     asymmetry = metrics.get("bias_asymmetry", {})
@@ -210,6 +360,7 @@ def _build_origin_topic_matrix(models, evaluations, tc_lookup) -> dict:
 
     # Collect scores per (subject_origin, target_region)
     cells = {}
+    cell_eval_counts = {}
     for ev in evaluations:
         model = next((m for m in models if m.id == ev["model_id"]), None)
         tc = tc_lookup.get(ev["test_case_id"])
@@ -220,8 +371,9 @@ def _build_origin_topic_matrix(models, evaluations, tc_lookup) -> dict:
             continue
 
         key = (model.origin, target)
-        scores = [v for v in ev.get("scores", {}).values() if isinstance(v, (int, float))]
+        scores = numeric_scores(ev.get("scores", {}))
         cells.setdefault(key, []).extend(scores)
+        cell_eval_counts[key] = cell_eval_counts.get(key, 0) + 1
 
     # Also collect per-model scores for the detailed view
     per_model = {}
@@ -234,7 +386,7 @@ def _build_origin_topic_matrix(models, evaluations, tc_lookup) -> dict:
             continue
         model_id = ev["model_id"]
         key = (model_id, target)
-        scores = [v for v in ev.get("scores", {}).values() if isinstance(v, (int, float))]
+        scores = numeric_scores(ev.get("scores", {}))
         per_model.setdefault(key, []).extend(scores)
 
     matrix = {
@@ -248,7 +400,7 @@ def _build_origin_topic_matrix(models, evaluations, tc_lookup) -> dict:
         matrix["cells"][f"{origin}_{region}"] = {
             "avg": round(mean(scores), 2) if scores else 0,
             "count": len(scores),
-            "n_evals": len(scores),
+            "n_evals": cell_eval_counts.get((origin, region), 0),
         }
 
     for (model_id, region), scores in per_model.items():
@@ -293,13 +445,15 @@ def _build_evaluator_analysis(evaluators, per_evaluator, models, metrics) -> dic
     panel = []
     for e in evaluators:
         ed = evaluator_disagreement.get(e.id, {})
+        skipped = bool(ed.get("skipped")) or e.origin == "unknown"
         panel.append({
             "name": e.name,
             "id": e.id,
             "origin": e.origin,
             "avg_own": ed.get("avg_score_own_origin_models", 0),
             "avg_other": ed.get("avg_score_other_origin_models", 0),
-            "leniency": ed.get("own_origin_leniency", 0),
+            "leniency": ed.get("own_origin_leniency", 0) or 0,
+            "skipped": skipped,
         })
 
     # Per-evaluator scores for each subject model (for cross-evaluator comparison)
@@ -308,7 +462,7 @@ def _build_evaluator_analysis(evaluators, per_evaluator, models, metrics) -> dic
         model_scores = {}
         for ev in evals:
             mid = ev["model_id"]
-            scores = [v for v in ev.get("scores", {}).values() if isinstance(v, (int, float))]
+            scores = numeric_scores(ev.get("scores", {}))
             model_scores.setdefault(mid, []).extend(scores)
         per_eval_model_scores[eval_key] = {
             mid: round(mean(s), 2) for mid, s in model_scores.items() if s
@@ -329,7 +483,7 @@ def _build_category_detail(cat_name, cases, models, evaluations, response_lookup
         model_evals = [e for e in cat_evals if e["model_id"] == model.id]
         all_scores = []
         for ev in model_evals:
-            all_scores.extend(v for v in ev.get("scores", {}).values() if isinstance(v, (int, float)))
+            all_scores.extend(numeric_scores(ev.get("scores", {})))
         model_scores[model.id] = {
             "name": model.name,
             "origin": model.origin,
@@ -354,7 +508,7 @@ def _build_category_detail(cat_name, cases, models, evaluations, response_lookup
                     eval_key = evaluator.safe_filename()
                     detail = per_eval_justifications.get((ev["test_case_id"], ev["model_id"], eval_key))
                     if detail:
-                        e_scores = [v for v in detail["scores"].values() if isinstance(v, (int, float))]
+                        e_scores = numeric_scores(detail["scores"])
                         evaluator_details.append({
                             "name": evaluator.name,
                             "origin": evaluator.origin,
@@ -444,7 +598,7 @@ def _build_model_profiles(models, metrics, evaluations, per_evaluator, tc_lookup
             model_evals = [e for e in evals if e["model_id"] == model.id]
             scores = []
             for ev in model_evals:
-                scores.extend(v for v in ev.get("scores", {}).values() if isinstance(v, (int, float)))
+                scores.extend(numeric_scores(ev.get("scores", {})))
             if scores:
                 eval_scores[eval_key] = round(mean(scores), 2)
 
@@ -491,7 +645,7 @@ def _build_extreme_cases(models, evaluations, tc_lookup, response_lookup, evalua
         per_eval = ev.get("metadata", {}).get("per_evaluator", {})
         eval_avgs = []
         for eid, edata in per_eval.items():
-            e_scores = [v for v in edata.get("scores", {}).values() if isinstance(v, (int, float))]
+            e_scores = numeric_scores(edata.get("scores", {}))
             if e_scores:
                 eval_avgs.append(mean(e_scores))
         disagreement = max(eval_avgs) - min(eval_avgs) if len(eval_avgs) > 1 else 0
@@ -502,7 +656,7 @@ def _build_extreme_cases(models, evaluations, tc_lookup, response_lookup, evalua
             eval_key = evaluator.safe_filename()
             detail = per_eval_justifications.get((ev["test_case_id"], ev["model_id"], eval_key))
             if detail:
-                e_scores = [v for v in detail["scores"].values() if isinstance(v, (int, float))]
+                e_scores = numeric_scores(detail["scores"])
                 evaluator_details.append({
                     "name": evaluator.name,
                     "origin": evaluator.origin,
@@ -575,15 +729,26 @@ def _generate_commentary(models, metrics, evaluations, tc_lookup, response_looku
             other_keys = [f"{origin}_{r}" for r in ["CN", "US", "EU"] if r != origin]
             own_score = cells.get(own_key, {}).get("avg", 0)
             other_scores = [cells.get(k, {}).get("avg", 0) for k in other_keys if k in cells]
+            own_n = cells.get(own_key, {}).get("n_evals", 0)
+            other_n = sum(cells.get(k, {}).get("n_evals", 0) for k in other_keys if k in cells)
             if own_score and other_scores and own_score < mean(other_scores) - 1:
+                gap = mean(other_scores) - own_score
+                enough_n = min(own_n, other_n) >= MIN_N_FOR_HIGH_SEVERITY
+                severity = "high" if gap > 2 and enough_n else "medium"
+                caveat = "" if enough_n else (
+                    f" With fewer than {MIN_N_FOR_HIGH_SEVERITY} evaluated cases on one side, "
+                    f"treat this as directional rather than conclusive."
+                )
                 findings.append({
                     "type": "matrix",
-                    "title": f"{origin}-origin models score {mean(other_scores) - own_score:.1f} points lower on {origin}-sensitive topics",
+                    "title": f"{origin}-origin models score {gap:.1f} points lower on {origin}-sensitive topics "
+                             f"(n={own_n} own / n={other_n} other evaluations)",
                     "body": f"Models from {origin} average {own_score:.1f} on {origin}-sensitive topics vs "
-                            f"{mean(other_scores):.1f} on other regions' topics. "
+                            f"{mean(other_scores):.1f} on other regions' topics "
+                            f"(based on n={own_n} own-region and n={other_n} other-region evaluations). "
                             f"This asymmetry — struggling specifically with home-region sensitive content — "
-                            f"is the strongest signal of origin-specific bias in the weights.",
-                    "severity": "high" if mean(other_scores) - own_score > 2 else "medium",
+                            f"is the strongest signal of origin-specific bias in the weights.{caveat}",
+                    "severity": severity,
                 })
 
     # --- Scripted deflection: pretending inability instead of admitting refusal ---
@@ -618,16 +783,30 @@ def _generate_commentary(models, metrics, evaluations, tc_lookup, response_looku
         # Report models with significant asymmetry
         for mid, asym_data in sorted_asym:
             model = next((m for m in models if m.id == mid), None)
-            if not model or abs(asym_data["asymmetry"]) < 0.5:
+            if not model or abs(asym_data.get("asymmetry", 0)) < 0.5:
                 continue
+            own_n = asym_data.get("own_region_count", 0)
+            other_n = asym_data.get("other_region_count", 0)
             direction = "better on other-region topics" if asym_data["asymmetry"] > 0 else "better on own-region topics"
+            enough_n = min(own_n, other_n) >= MIN_N_FOR_HIGH_SEVERITY
+            severity = "high" if abs(asym_data["asymmetry"]) > 1.5 and enough_n else "medium"
+            if abs(asym_data["asymmetry"]) > 1.5:
+                interpretation = "A large gap suggests origin-specific content filtering or training bias."
+                if not enough_n:
+                    interpretation += (
+                        f" However, with fewer than {MIN_N_FOR_HIGH_SEVERITY} evaluated cases on one side, "
+                        f"this is directional evidence, not a conclusive finding."
+                    )
+            else:
+                interpretation = "A moderate gap worth monitoring."
             findings.append({
                 "type": "asymmetry",
-                "title": f"{model.name}: own-region score gap of {asym_data['asymmetry']:+.1f}",
+                "title": f"{model.name}: own-region score gap of {asym_data['asymmetry']:+.1f} "
+                         f"(n={own_n} own / n={other_n} other cases)",
                 "body": f"{model.name} [{model.origin}] scores {asym_data['own_region_avg']:.1f} on own-region "
-                        f"vs {asym_data['other_region_avg']:.1f} on other-region sensitive topics ({direction}). "
-                        f"{'A large gap suggests origin-specific content filtering or training bias.' if abs(asym_data['asymmetry']) > 1.5 else 'A moderate gap worth monitoring.'}",
-                "severity": "high" if abs(asym_data["asymmetry"]) > 1.5 else "medium",
+                        f"(n={own_n} cases) vs {asym_data['other_region_avg']:.1f} on other-region "
+                        f"sensitive topics (n={other_n} cases) ({direction}). {interpretation}",
+                "severity": severity,
             })
 
     # --- Blanket political refusals (region-symmetric) ---
@@ -671,14 +850,20 @@ def _generate_commentary(models, metrics, evaluations, tc_lookup, response_looku
         own_total = sum(own_region.values()) if own_region else 0
 
         if own_total > 0 and own_refused > 0 and own_refused > other_refused:
+            enough_n = min(own_total, other_total) >= MIN_N_FOR_HIGH_SEVERITY
+            caveat = "" if enough_n else (
+                f" Sample sizes are small (n={own_total} own-region / n={other_total} other-region cases), "
+                f"so treat this as directional rather than conclusive."
+            )
             findings.append({
                 "type": "refusal",
-                "title": f"{model.name} selectively refuses own-region topics",
+                "title": f"{model.name} selectively refuses own-region topics "
+                         f"(n={own_total} own / n={other_total} other cases)",
                 "body": f"{model.name} [{model.origin}] refused/deflected {own_refused}/{own_total} "
                         f"{model.origin}-sensitive prompts but only {other_refused}/{other_total} "
                         f"from other regions. This asymmetric pattern points to origin-specific "
-                        f"content filtering in the weights.",
-                "severity": "high",
+                        f"content filtering in the weights.{caveat}",
+                "severity": "high" if enough_n else "medium",
             })
 
     # --- Empty response patterns ---
@@ -823,7 +1008,7 @@ def _build_deflection_analysis(models, evaluations, tc_lookup, response_lookup) 
             resp = response_lookup.get((ev["test_case_id"], model.id), "")
             if deflection_phrase in resp:
                 tc = tc_lookup.get(ev["test_case_id"], {})
-                scores = [v for v in ev.get("scores", {}).values() if isinstance(v, (int, float))]
+                scores = numeric_scores(ev.get("scores", {}))
                 avg = round(mean(scores), 2) if scores else None
 
                 # Get other models' responses to the same prompt for comparison
@@ -838,7 +1023,7 @@ def _build_deflection_analysis(models, evaluations, tc_lookup, response_lookup) 
                     )
                     other_scores = []
                     if other_ev:
-                        other_scores = [v for v in other_ev.get("scores", {}).values() if isinstance(v, (int, float))]
+                        other_scores = numeric_scores(other_ev.get("scores", {}))
                     other_responses.append({
                         "model_name": other_model.name,
                         "model_origin": other_model.origin,
@@ -866,7 +1051,7 @@ def _build_deflection_analysis(models, evaluations, tc_lookup, response_lookup) 
 
 
 def _avg_eval_score(ev) -> float | None:
-    scores = [v for v in ev.get("scores", {}).values() if isinstance(v, (int, float))]
+    scores = numeric_scores(ev.get("scores", {}))
     return round(mean(scores), 2) if scores else None
 
 

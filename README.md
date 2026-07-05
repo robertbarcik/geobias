@@ -162,15 +162,19 @@ GeoBias produces a single self-contained HTML file (no external dependencies) wi
 
 ## Cost
 
-The multi-origin evaluator panel is dramatically cheaper than using a frontier model as sole judge:
+The multi-origin evaluator panel is dramatically cheaper than using a frontier model as sole judge.
+A default 7B run is 440 subject responses (language_quality expands 8 cases into 40 prompts, one per
+language) and 3 x 440 = 1,320 evaluation calls:
 
-| Setup | 7B group (5 models, 7 categories, 8 cases each) | Notes |
-|-------|--------------------------------------------------|-------|
-| 3-evaluator panel (default) | ~$0.50 | Qwen 235B + Llama 70B + Mistral Large |
-| Single budget evaluator | ~$0.15 | e.g., just Qwen 235B |
-| Single Claude Sonnet (old approach) | ~$3.50 | And less rigorous |
+| Setup | 7B group (5 models, 7 categories, 8 cases each = 440 responses) | Notes |
+|-------|------------------------------------------------------------------|-------|
+| 3-evaluator panel (default) | ~$0.95 | Qwen 235B + Llama 70B + Mistral Large |
+| Single budget evaluator | ~$0.36 | e.g., just Qwen 235B (estimator uses panel-average pricing, so actual Qwen-only cost is lower) |
+| Single Claude Sonnet as sole judge | ~$16 | At $3/$15 per M tokens for the same 1,320 evaluation calls, and less rigorous |
 
-Estimates are rough — actual cost depends on response lengths. Always use `--dry-run` first.
+Estimates come from `estimate_cost()` using measured token averages (~1,100 completion tokens per
+subject response). They are still rough: actual cost depends on response lengths. Always use
+`--dry-run` first.
 
 ## Environment Variables
 

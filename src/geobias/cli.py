@@ -19,9 +19,8 @@ from .config import (
     DEFAULT_EVALUATORS,
     DEFAULT_MODEL_GROUPS,
     EvalConfig,
-    ModelSpec,
     get_cases_per_category,
-    get_evaluators,
+    resolve_evaluators,
     resolve_models,
 )
 from .llm import estimate_cost
@@ -69,16 +68,7 @@ def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, ou
         sys.exit(1)
 
     # Resolve evaluators
-    if evaluator_ids:
-        evaluators = []
-        known = {e.id: e for e in DEFAULT_EVALUATORS}
-        for eid in evaluator_ids:
-            if eid in known:
-                evaluators.append(known[eid])
-            else:
-                evaluators.append(ModelSpec(eid, eid.split("/")[-1], "unknown", 0, "unknown"))
-    else:
-        evaluators = get_evaluators()
+    evaluators = resolve_evaluators(list(evaluator_ids) if evaluator_ids else None)
 
     # Resolve output directory
     if output is None:
@@ -123,7 +113,7 @@ def evaluate(group, model_ids, categories, cases_per_category, evaluator_ids, ou
         click.echo(f"  {m.name:30s} [{m.origin}] {m.params_b}B  ({m.id})")
 
     # Cost estimate
-    cost = estimate_cost(len(models), len(cats), cpc, len(evaluators))
+    cost = estimate_cost(len(models), cats, cpc, len(evaluators))
     click.echo(f"\nEstimated API calls: {cost['total_api_calls']}")
     click.echo(f"  - Test generation:  {cost['generation_calls']}")
     click.echo(f"  - Model responses:  {cost['response_calls']}")

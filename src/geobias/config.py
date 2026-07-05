@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -130,20 +133,32 @@ class EvalConfig:
         }
 
 
+def _unknown_evaluator(model_id: str) -> ModelSpec:
+    """Build a spec for a custom evaluator that is not in the known panel."""
+    logger.warning(
+        f"Evaluator '{model_id}' is not in the known panel, so its origin is 'unknown'. "
+        f"The own-origin leniency analysis will be SKIPPED for this evaluator "
+        f"(there is no origin to compare against). Its scores still count toward consensus."
+    )
+    return ModelSpec(model_id, model_id.split("/")[-1], "unknown", 0, "unknown")
+
+
 def get_evaluators() -> list[ModelSpec]:
     """Get evaluator models from env or defaults."""
     raw = os.environ.get("GEOBIAS_EVALUATORS")
     if raw:
-        ids = [s.strip() for s in raw.split(",")]
+        ids = [s.strip() for s in raw.split(",") if s.strip()]
         all_known = {m.id: m for m in DEFAULT_EVALUATORS}
-        result = []
-        for mid in ids:
-            if mid in all_known:
-                result.append(all_known[mid])
-            else:
-                result.append(ModelSpec(mid, mid.split("/")[-1], "unknown", 0, "unknown"))
-        return result
+        return [all_known[mid] if mid in all_known else _unknown_evaluator(mid) for mid in ids]
     return list(DEFAULT_EVALUATORS)
+
+
+def resolve_evaluators(evaluator_ids: Optional[list[str]] = None) -> list[ModelSpec]:
+    """Resolve evaluator specs from explicit IDs, or fall back to env/defaults."""
+    if not evaluator_ids:
+        return get_evaluators()
+    all_known = {m.id: m for m in DEFAULT_EVALUATORS}
+    return [all_known[eid] if eid in all_known else _unknown_evaluator(eid) for eid in evaluator_ids]
 
 
 def get_cases_per_category() -> int:

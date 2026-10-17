@@ -59,6 +59,22 @@ DEFAULT_MODEL_GROUPS: dict[str, ModelGroup] = {
             ModelSpec("mistralai/ministral-8b-2512", "Ministral 8B", "EU", 8.0, "Mistral"),
         ],
     ),
+    # October 2026 re-run. params_b = ACTIVE parameters per token for MoE models
+    # (total given in the comment). IDs verified against OpenRouter on 2026-10-17.
+    "ext-2026-10": ModelGroup(
+        name="ext-2026-10",
+        description="8–30B class, October 2026 generation",
+        models=[
+            ModelSpec("qwen/qwen3.5-9b", "Qwen3.5 9B", "CN", 9.0, "Qwen"),  # bridge model (also in the March 7b run)
+            ModelSpec("qwen/qwen3.8-27b", "Qwen3.8 27B", "CN", 27.0, "Qwen"),
+            ModelSpec("deepseek/deepseek-v4.1-flash", "DeepSeek V4.1 Flash (MoE)", "CN", 8.0, "DeepSeek"),  # MoE, ~8B active on input
+            ModelSpec("ibm-granite/granite-4.2-8b", "Granite 4.2 8B", "US", 8.0, "Granite"),
+            ModelSpec("nvidia/nemotron-3.5-lightning", "Nemotron 3.5 Lightning (MoE)", "US", 3.0, "Nemotron"),  # MoE, 30B total, 3B active
+            ModelSpec("meta/muse-glimmer-30b", "Muse Glimmer 30B", "US", 30.0, "Muse"),
+            ModelSpec("mistralai/ministral-8b-2512", "Ministral 8B", "EU", 8.0, "Mistral"),  # bridge model (also in the March 7b run)
+            ModelSpec("mistralai/ministral-14b-2512", "Ministral 14B", "EU", 14.0, "Mistral"),
+        ],
+    ),
 }
 
 # Test categories

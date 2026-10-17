@@ -20,6 +20,12 @@ from .llm import LLMClient
 
 logger = logging.getLogger(__name__)
 
+# Token budget for subject-model responses. Reasoning models spend hidden thinking
+# tokens inside this budget; at 2048 (the March 2026 value) 69 of 704 October responses
+# came back empty and 204 more were cut off mid-answer, which evaluators would read as
+# refusals. 8192 still left 26 capped (Qwen3.8 27B: 14); 16384 leaves room for both.
+RESPONSE_MAX_TOKENS = 16384
+
 # Regions used for the own-region vs other-region asymmetry split. Cases whose
 # target_region is neutral/other/None are excluded from both sides (matching
 # the report's origin x topic matrix logic).
@@ -68,31 +74,43 @@ class EvaluationPipeline:
         # Stage 2: Collect model responses
         logger.info("Stage 2: Collecting model responses...")
         all_cases = [c for cases in self.test_cases.values() for c in cases]
-        for model in self.config.models:
+        # All subject models are collected concurrently; the client semaphore and
+        # rate limiter bound the number of requests in flight.
+        async def collect_one(model: ModelSpec) -> None:
             model_responses = await self._collect_responses(model, all_cases)
             self.responses[model.id] = model_responses
             logger.info(f"  {model.name}: {len(model_responses)} responses collected")
             self._save_responses(model)
 
+        await asyncio.gather(*[collect_one(m) for m in self.config.models])
+
         # Stage 3: Evaluate responses with each evaluator
         logger.info(f"Stage 3: Evaluating responses with {len(evaluators)} evaluator(s)...")
-        for evaluator in evaluators:
+
+        async def evaluate_with(evaluator: ModelSpec) -> None:
             logger.info(f"  Evaluator: {evaluator.name} [{evaluator.origin}]")
             evaluator_evals = []
             for cat in categories:
                 cases = self.test_cases[cat.name]
                 for model in self.config.models:
                     model_responses = {r.test_case_id: r for r in self.responses[model.id]}
-                    for case in cases:
-                        resp = model_responses.get(case.id)
-                        if not resp:
-                            continue
-                        evaluation = await self._evaluate_response(
-                            cat, case, model, resp.response, evaluator
-                        )
-                        evaluator_evals.append(evaluation)
-                    logger.info(f"    {cat.name} × {model.name}: done")
+                    pending = [(case, model_responses.get(case.id)) for case in cases]
+                    pending = [(case, resp) for case, resp in pending if resp]
+                    # Evaluate a block concurrently (bounded by the client semaphore);
+                    # _evaluate_response never raises, so plain gather keeps the order.
+                    batch_size = 16
+                    for i in range(0, len(pending), batch_size):
+                        batch = pending[i : i + batch_size]
+                        results = await asyncio.gather(*[
+                            self._evaluate_response(cat, case, model, resp.response, evaluator)
+                            for case, resp in batch
+                        ])
+                        evaluator_evals.extend(results)
+                    logger.info(f"    [{evaluator.name}] {cat.name} × {model.name}: done")
             self.evaluations_by_evaluator[evaluator.id] = evaluator_evals
+
+        # The three evaluators run side by side; each keeps its own ordered list.
+        await asyncio.gather(*[evaluate_with(e) for e in evaluators])
 
         # Stage 3b: Compute consensus evaluations
         logger.info("Stage 3b: Computing evaluator consensus...")
@@ -129,6 +147,8 @@ class EvaluationPipeline:
         resp_file = self.run_dir / "responses" / f"{model.safe_filename()}.json"
         if resp_file.exists():
             existing = json.loads(resp_file.read_text())
+            # On resume, rows saved as transport errors (e.g. upstream 429) are retried.
+            existing = [r for r in existing if not str(r.get("response", "")).startswith("[ERROR")]
             cached_ids = {r["test_case_id"] for r in existing}
             cached = [ModelResponse(**r) for r in existing]
         else:
@@ -139,7 +159,7 @@ class EvaluationPipeline:
         if not remaining:
             return cached
 
-        batch_size = 5
+        batch_size = 10
         new_responses = []
         for i in range(0, len(remaining), batch_size):
             batch = remaining[i : i + batch_size]
@@ -168,7 +188,7 @@ class EvaluationPipeline:
             model=model.id,
             messages=messages,
             temperature=0.0,
-            max_tokens=2048,
+            max_tokens=RESPONSE_MAX_TOKENS,
         )
         return ModelResponse(
             test_case_id=case.id,

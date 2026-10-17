@@ -5,13 +5,15 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
+import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from openai import AsyncOpenAI
+from openai import APIStatusError, AsyncOpenAI, RateLimitError
 
 
 @dataclass
@@ -25,7 +27,7 @@ class LLMResponse:
 class LLMClient:
     """Async OpenRouter client with response caching and rate limiting."""
 
-    def __init__(self, cache_dir: Optional[Path] = None, requests_per_minute: int = 200):
+    def __init__(self, cache_dir: Optional[Path] = None, requests_per_minute: int = 300):
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
             raise RuntimeError("OPENROUTER_API_KEY environment variable is required")
@@ -33,12 +35,49 @@ class LLMClient:
         self.client = AsyncOpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=api_key,
+            # Explicit per-request timeout: the SDK default (600 s x retries) let a
+            # single stalled provider call hang a whole run for 30 min.
+            timeout=180.0,
+            max_retries=2,
         )
+        # Optional direct door to Mistral's own API for mistralai/* models: the same
+        # models that OpenRouter's Mistral provider serves, without the shared-pool
+        # 429s. Cache keys and stored model ids keep the OpenRouter id.
+        self.mistral_client = None
+        mistral_key = os.environ.get("MISTRAL_API_KEY")
+        if mistral_key:
+            self.mistral_client = AsyncOpenAI(
+                base_url="https://api.mistral.ai/v1",
+                api_key=mistral_key,
+                timeout=180.0,
+                max_retries=2,
+            )
         self.cache_dir = cache_dir
         self.rpm_limit = requests_per_minute
-        self._semaphore = asyncio.Semaphore(20)  # max concurrent requests
+        self._semaphore = asyncio.Semaphore(40)  # max concurrent requests
+        # Mistral's shared pool on OpenRouter 429s under any burst (697 rate-limit
+        # answers in 13 minutes at 16 in flight), so Mistral models get a tiny lane.
+        # Direct Mistral door tolerates a wider lane than the shared pool.
+        self._model_limits = {"mistralai/": 8 if self.mistral_client is not None else 3}
+        self._model_semaphores: dict[str, asyncio.Semaphore] = {}
         self._last_request_time = 0.0
         self._min_interval = 60.0 / requests_per_minute
+        # Per-prefix pacing: Mistral's API limits requests per second, so Mistral
+        # calls start at most once per second instead of colliding in a burst.
+        self._model_min_interval = {"mistralai/": 1.0}
+        self._model_last_start: dict[str, float] = {}
+        # Per-prefix OpenRouter provider preferences. The Qwen3 235B evaluator's
+        # default (cheapest) route aborted or queued for minutes on 2026-10-17;
+        # the throughput sort lands on a provider that answers.
+        self._provider_prefs = {"qwen/qwen3-235b": {"sort": "throughput"}}
+
+    def _sem_for(self, model: str) -> asyncio.Semaphore:
+        for prefix, limit in self._model_limits.items():
+            if model.startswith(prefix):
+                if prefix not in self._model_semaphores:
+                    self._model_semaphores[prefix] = asyncio.Semaphore(limit)
+                return self._model_semaphores[prefix]
+        return self._semaphore
 
     def _cache_key(self, model: str, messages: list[dict], temperature: float) -> str:
         payload = json.dumps({"model": model, "messages": messages, "temperature": temperature}, sort_keys=True)
@@ -82,7 +121,7 @@ class LLMClient:
         if cached:
             return cached
 
-        async with self._semaphore:
+        async with self._sem_for(model):
             # Rate limiting
             now = time.monotonic()
             elapsed = now - self._last_request_time
@@ -90,12 +129,55 @@ class LLMClient:
                 await asyncio.sleep(self._min_interval - elapsed)
             self._last_request_time = time.monotonic()
 
-            response = await self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            # Hard wall-clock cap on top of the SDK timeout: a provider that keeps the
+            # connection open without answering must not stall the whole run.
+            # Upstream 429s (shared provider pools) back off and retry here, on top of
+            # the SDK's own two retries, so a burst never turns into lost rows.
+            log = logging.getLogger("geobias")
+            attempt = 0
+            while True:
+                attempt += 1
+                try:
+                    client, wire_model = self.client, model
+                    extra: dict = {}
+                    if self.mistral_client is not None and model.startswith("mistralai/"):
+                        client, wire_model = self.mistral_client, model.split("/", 1)[1]
+                    else:
+                        for prefix, prefs in self._provider_prefs.items():
+                            if model.startswith(prefix):
+                                extra["provider"] = prefs
+                    for prefix, gap in self._model_min_interval.items():
+                        if model.startswith(prefix):
+                            wait = self._model_last_start.get(prefix, 0.0) + gap - time.monotonic()
+                            if wait > 0:
+                                await asyncio.sleep(wait)
+                            self._model_last_start[prefix] = time.monotonic()
+                    response = await asyncio.wait_for(
+                        client.chat.completions.create(
+                            model=wire_model,
+                            messages=messages,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            extra_body=extra or None,
+                        ),
+                        timeout=240.0,
+                    )
+                    break
+                except asyncio.TimeoutError:
+                    if attempt >= 3:
+                        raise
+                    log.warning(f"Request to {model} exceeded 240 s (attempt {attempt}/3), retrying")
+                except RateLimitError:
+                    if attempt >= 8:
+                        raise
+                    delay = min(60.0, 3.0 * 2 ** (attempt - 1)) + random.uniform(0, 2)
+                    log.warning(f"429 from {model}, waiting {delay:.0f} s (attempt {attempt}/8)")
+                    await asyncio.sleep(delay)
+                except APIStatusError as e:
+                    if e.status_code < 500 or attempt >= 4:
+                        raise
+                    log.warning(f"{e.status_code} from {model}, retrying in {5 * attempt} s")
+                    await asyncio.sleep(5 * attempt)
 
         content = response.choices[0].message.content or ""
         usage = {}
